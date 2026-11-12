@@ -38,4 +38,4 @@ Left and right arms are separate parts. Each one contributes the arm stat set. L
 
 Resolution talks about the user's Power, Rate of Success, and similar as single values, and about Total Armour. The source does not say whether those are summed, taken from the part that is acting, or combined some other way.
 
-Defense is referenced by Damage, by the Aim Shot quirk, and by Enfeebled. It is not in this stat list.
+Defence is referenced by Damage, by the Aim Shot quirk, and by Enfeebled. It is not in this stat list.

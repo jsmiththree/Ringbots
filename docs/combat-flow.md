@@ -14,7 +14,7 @@ Play is real-time. Time freezes whenever a Ringbot the player controls enters Ne
 For a single Ringbot:
 
 1. It is in Neutral. Time is frozen. The player selects an action.
-2. Time resumes. The Ringbot performs the action. The phases are start-up, active time, then wind-down (`STU`, then `ATV`, then `WND`), unless the action is interrupted.
+2. Time resumes. The Ringbot performs the action. The phases are start-up, active time, then wind-down (`STU`, then `ADR`, then `WND`), unless the action is interrupted.
 3. When the action finishes, the Ringbot returns to Neutral.
 
 That cycle runs for every Ringbot in the fight. The timing values are in [resolution.md](resolution.md).
@@ -26,13 +26,13 @@ The source flow figure is more specific about what the player picks while time i
 - Right arm: Attack, Brace, or Parry.
 - Legs: Move.
 
-Time stays frozen through that choice. Start-up, active time, and wind-down (`STU`, `ATV`, `WND`) run while time is moving, and wind-down returns the Ringbot to Neutral. The eight action categories in [actions.md](actions.md) are the attack and support vocabulary; this figure is the part-selection path around them.
+Time stays frozen through that choice. Start-up, active time, and wind-down (`STU`, `ADR`, `WND`) run while time is moving, and wind-down returns the Ringbot to Neutral. The eight action categories in [actions.md](actions.md) are the attack and support vocabulary; this figure is the part-selection path around them.
 
-![Action flow. The inner region is frozen time: Neutral, pick a part, pick an action. The outer path is live time: STU frames, ATV frames, WND frames, back to Neutral.](images/action-flow.png)
+![Action flow. The inner region is frozen time: Neutral, pick a part, pick an action. The outer path is live time: STU frames, ADR frames, WND frames, back to Neutral.](images/action-flow.png)
 
 Two extra constraints:
 
-- The Ringfighter needs line of sight to a Ringbot to give it a command.
+- Line of sight between the Rightfighter and their Ringbot is required to issue a command. The source prints Rightfighter.
 - A Ranged projectile hits allies if they are on its path. Drone and Missile are the techniques that ignore allies.
 
 ## Win conditions

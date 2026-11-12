@@ -19,7 +19,7 @@ The class is `CombatClock`. The file is `combat_clock.gd`.
 Each participant is either waiting or committed.
 
 - Waiting means it needs an order. Time does not advance while any blocking participant is still waiting.
-- Committed means an order has been accepted. The participant then spends start-up, an active window, and wind-down. Those are the source's `STU`, `ATV`, and `WND`. Wind-down returns it to waiting.
+- Committed means an order has been accepted. The participant then spends start-up, an active window, and wind-down. Those are the source's `STU`, `ADR`, and `WND`. Wind-down returns it to waiting.
 
 Anyone already committed keeps the time they had left. A pause stops the whole fight, and the resume continues from that point. `CombatClock` is also the only thing that resolves hits, interrupts, and the return to waiting. Those are simulation results, not orders.
 
@@ -57,9 +57,19 @@ There is no special "the player" inside `CombatClock`. Adding someone is registe
 | Who may freeze time | Human-owned participants block | A different mode can change the flag |
 | How an order is chosen | Local part menu, then an instant CPU policy | Another local controller, a decision tree, a remote source |
 | What an action does | Attack, Brace, Parry, Move with fixed durations | The eight action categories, techniques, real formulas |
-| How the fight is drawn | Disposable top-down markers and a phase readout | Another camera or body |
+| How the fight is drawn | Disposable top-down markers and a phase readout | The joint tree in Ringbot body |
 
 Build this split while there is still one participant. The menu and the marker can be thrown away. The pause rule and the phase timing in `CombatClock` stay.
+
+## Ringbot body
+
+The body is a tree of `Node3D` joints. An `AnimationPlayer` keys a joint's rotation, and every child of that joint moves with it. Part meshes are those children. The clip does not key the mesh.
+
+Every joint stays in the tree. A clip only keys the joints for the parts that are slotted. A joint with no mesh is not drawn, and it stays at its scene rotation unless a clip writes it.
+
+The first body is one base set: body, head, both arms, and one leg set, built from untextured stretched cubes. Each mesh shares the rest orientation of its joint, so a swap is parenting a different child there. More parts come later, as movement options or as features on the same joints. An arm cannon or an arm sword is another mesh on the arm. Wheels, treads, and a multi-leg set are their own joints and their own clips. The body, head, and arms stay on the shared joints.
+
+This stays outside `CombatClock`. Markers stand in until the pause and the resume are obvious.
 
 ## Build order
 

@@ -15,7 +15,9 @@ A checkpoint is not the end of the work. More features can follow on the updated
 
 ## Docs first
 
-Read the current feature or thought and the diff. Update only the docs that drifted.
+Follow [sync-source-doc](../sync-source-doc/SKILL.md) before anything else. Re-read the design document and update `docs/` where it drifted, including **Unresolved in the source**. If the source did not change, say so and continue.
+
+Then read the current feature or thought and the diff. Update only the other docs that drifted.
 
 | Path | Update it when |
 | --- | --- |
