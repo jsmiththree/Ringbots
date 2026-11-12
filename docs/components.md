@@ -18,7 +18,7 @@ The control pair is two rings. One has the controller interface and is worn on t
 
 Up to four control rings can be worn at once, on the index, middle, ring, and pinky fingers. The matching finger on the dominant hand works that ring. The thumbs are shared across rings during combat.
 
-Head and Arm parts each have a Technique, which adds an effect on top of the action category. See [techniques.md](techniques.md). Which stats each part carries is in [stats.md](stats.md).
+Head and Arm parts each have a Technique, which adds an effect on top of the action category. See [techniques.md](techniques.md). Which stats each part carries is in [stats.md](stats.md). The named parts and the numbers on the sheet are in [catalog/parts.csv](catalog/parts.csv). Ring names and their action numbers are in [catalog/rings.csv](catalog/rings.csv).
 
 ## Prototype body
 

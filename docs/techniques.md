@@ -17,14 +17,14 @@ Durations, factors, and potencies are described relative to a stat. The source d
 | Break | Raises this action's Rate of Success by a specified factor. |
 | Bug | Applies Mask. Duration follows the user's Rate of Success. |
 | Burn | Applies Flow. Duration follows the user's Rate of Success. |
-| Cancel Bomb | Passive. Incoming damage from Missile or Napalm sources becomes 0. |
+| Cancel Bomb | Passive. Incoming damage from Missile or Drone sources becomes 0. |
 | Cancel Gravity | Passive. Incoming damage from Break or Press sources becomes 0. |
 | Cancel Optics | Passive. Incoming damage from Laser or Beam sources becomes 0. |
 | Chain Gun | No additional effect. |
 | Conceal | Raises another Ringbot's Evasion. The factor follows the user's Rate of Success. The duration follows the user's Power. |
 | Confusion | Applies Chaos. Duration follows the user's Rate of Success. |
-| Counterattack | If the target is in its Radiation state, the targeted part's Armour becomes 0. Otherwise this action's damage is reduced by a specified factor. |
-| Defense Change | Transforms this part into a random defensive part, other than itself. |
+| Counterattack | If the target Ringbot is in its WND state, the targeted part's Armour becomes 0. Otherwise the user's Damage is reduced by a specified factor. |
+| Defence Change | Transforms this part into a random defensive part, other than itself. |
 | Disappear | Raises the user's Evasion. The factor follows the user's Rate of Success. The duration follows the user's Power. |
 | Drone | This action's Intent becomes 200%. The projectile ignores allies along its trajectory. |
 | Emboss | Grants Chrome to the user. Duration follows the user's Rate of Success. |
@@ -42,7 +42,7 @@ Durations, factors, and potencies are described relative to a stat. The source d
 | Melt | Applies Flow. Duration follows the user's Power. |
 | Mirror | Copies the targeted part and gains its actions and abilities. Duration follows the original source's Power. |
 | Missile | This action's Intent becomes 100%. The projectile ignores allies along its trajectory. |
-| No Defense | Applies Enfeebled. Duration follows the user's Rate of Success. |
+| No Defence | Applies Enfeebled. Duration follows the user's Rate of Success. |
 | No Escape | Applies Ensnared. Duration follows the user's Rate of Success. |
 | Offensive Change | Transforms this part into a random Strike, Berserk, Shoot, or Aim Shot part, other than itself. |
 | Overclock | Passive. Lowers Charge and Radiation of the other equipped parts by a factor of the user's Power. |
@@ -72,4 +72,4 @@ Durations, factors, and potencies are described relative to a stat. The source d
 
 Status names (Mask, Flow, Chaos, and the rest) are defined in [status-conditions.md](status-conditions.md). Intent, Poise, Torque, and Size are derived values in [resolution.md](resolution.md).
 
-Napalm is named by Cancel Bomb and is not otherwise defined. Air and Sea in Anti-Air and Anti-Sea match the leg types of those names.
+Air and Sea in Anti-Air and Anti-Sea match the leg types of those names.

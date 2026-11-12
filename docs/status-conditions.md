@@ -11,7 +11,7 @@ A Ringbot can carry one instance of each status at a time. Applying a status the
 | Mask | Lowers Rate of Success until the status ends. |
 | Chaos | The affected Ringbot cannot choose a target, and its attacks may hit allies. Strike and Berserk go to the nearest Ringbot that can be targeted. It cannot attack itself. |
 | Ensnared | Evasion is 0 until the status ends. |
-| Enfeebled | The defense stat is 0 until the status ends. Defense is not a base stat; see [stats.md](stats.md). |
+| Enfeebled | The Defence stat is 0 until the status ends. Defence is not a base stat; see [stats.md](stats.md). |
 | Impair | One arm is disabled and cannot be used until the status ends. |
 | Braced | Incoming damage is reduced to 0 when it is below the remaining Armour of the part that would be hit. Lasts until the status ends. |
 | Nullify | Clears every other status, and blocks new statuses, until Nullify ends. |
