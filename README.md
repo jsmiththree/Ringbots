@@ -2,9 +2,9 @@
 
 A Godot prototype of a top-down combat game. Ringbots fight in real time, and time freezes when one you control is ready for an order.
 
-The design is written down. The Godot project opens on a static title screen. The first thing to build is the combat clock.
+The design is written down. The Godot project opens on a two-cube fight for watching the combat clock. A static title scene is still in the project.
 
-A placeholder build is at [ringbots.bingus.gg](https://ringbots.bingus.gg).
+The two-cube fight is at [ringbots.bingus.gg](https://ringbots.bingus.gg).
 
 ## Where to read
 
