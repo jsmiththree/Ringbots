@@ -1,6 +1,6 @@
 # Public build
 
-The group plays by opening a link. They do not install Godot. The hostname is already reserved. A local web export exists at `build/web/`. It is a black page with the scratch logo and nothing to click.
+The group plays by opening a link. They do not install Godot. The hostname is already reserved. A local web export exists at `build/web/`. The public page is the two-cube fight.
 
 This repo owns only its own site file, `caddy/ringbots.caddy`, and the files that site serves. The board Caddyfile, cloudflared, and every other app stay in the home-server stack. Do not copy those configs here, and do not edit them from this project.
 
@@ -18,7 +18,7 @@ The hostname is already on the existing **bingus** tunnel. Do not create a secon
 
 Caddy on the zimaboard serves this hostname because it imports `/srv/caddy/apps/*.caddy`, and that directory is already mounted into the container. Publishing copies `caddy/ringbots.caddy` to `/srv/caddy/apps/ringbots.caddy` and the export to `/srv/caddy/apps/ringbots-web`, then reloads the existing Caddy. The files have to live under that mount. This project does not add a volume or edit the board's service config. The board must stay on. This PC can sleep after that.
 
-The export is produced from `godot/` with the Web preset, written to `build/web/index.html`. The logo file is 49×12. The page draws it at 4× (196×48) with nearest filtering, centered on black.
+The export is produced from `godot/` with the Web preset, written to `build/web/index.html`. The main scene is the two-cube fight. The static title scene is still in the project and is not the page that opens.
 
 ## Publish
 
