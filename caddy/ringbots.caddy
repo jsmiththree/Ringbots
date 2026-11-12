@@ -1,0 +1,19 @@
+# Board frontdoor drop-in (/srv/caddy/apps/ringbots.caddy).
+# This is the only routing config this repo owns. Do not bind :80.
+# The board Caddy imports this file. It is not part of the board's own config.
+
+http://ringbots.bingus.gg {
+	handle {
+		encode gzip zstd
+		root * /srv/caddy/apps/ringbots-web
+		header {
+			Cross-Origin-Opener-Policy same-origin
+			Cross-Origin-Embedder-Policy require-corp
+		}
+		@volatile path /index.html /index.js /index.pck /index.wasm /index.png /index.icon.png /index.apple-touch-icon.png /index.audio.worklet.js /index.audio.position.worklet.js
+		header @volatile Cache-Control "no-cache, must-revalidate"
+		header @volatile CDN-Cache-Control "no-store"
+		try_files {path} /index.html
+		file_server
+	}
+}
