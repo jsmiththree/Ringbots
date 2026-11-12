@@ -15,6 +15,7 @@ Left in the source document:
 - Setting prose.
 - The worldbuilding ideas parking lot (transhumanism, time travel).
 - The combat ideas parking lot, which is still empty in the source.
+- User interface. Section 5 names a Main Menu and leaves the next item blank.
 
 Setting 2 combat (protect the Ringfighter, third-party interruptions) is recorded only as deferred. The source marks that win condition as later work.
 

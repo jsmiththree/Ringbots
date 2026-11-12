@@ -2,7 +2,7 @@
 
 Build notes for this repo. The gameplay rules live in [docs/](../docs/README.md), transcribed from the design document, and in that document itself. This file is how the prototype gets built. It does not add rules, stats, or content.
 
-The Godot 4.8 project is `godot/`. The clock and its test live in `godot/combat/`. `scenes/fight.tscn` is two cubes on the debug grid, so the pause can be watched. The title scene remains at `scenes/main_menu.tscn`.
+The Godot 4.8 project is `godot/`. The clock and its test live in `godot/combat/`. The project opens on `scenes/main_menu.tscn`. That screen shows the logo at its own size, and Enter loads `scenes/fight.tscn`. The fight is two cubes on the debug grid, so the pause can be watched.
 
 The playable prototype is GDScript, including `CombatClock`. The group needs a browser build, and Godot 4 cannot export C# to the web. Community C# web builds need a custom engine and are not a path for this project. See [hosting.md](hosting.md) for the public URL.
 
