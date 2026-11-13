@@ -2,7 +2,7 @@
 
 Build notes for this repo. The gameplay rules live in [docs/](../docs/README.md), transcribed from the design document, and in that document itself. This file is how the prototype gets built. It does not add rules, stats, or content.
 
-The Godot 4.8 project is `godot/`. The clock and its test live in `godot/combat/`. The project opens on `scenes/main_menu.tscn`. That screen shows the logo at its own size, and Enter loads `scenes/fight.tscn`. The fight is two cubes on the debug grid, so the pause can be watched.
+The Godot 4.8 project is `godot/`. The clock and its test live in `godot/combat/`. The project opens on `scenes/main_menu.tscn`. That screen shows the logo at its own size. Enter or a click loads `scenes/fight.tscn`. The fight is one cube on the debug grid. A camera controller keeps a spring arm on that cube. Right-drag orbits it, and the wheel zooms, within distance and pitch limits. The second person comes back after that view is comfortable.
 
 The playable prototype is GDScript, including `CombatClock`. The group needs a browser build, and Godot 4 cannot export C# to the web. Community C# web builds need a custom engine and are not a path for this project. See [hosting.md](hosting.md) for the public URL.
 
@@ -39,7 +39,7 @@ A result cancels a participant back to waiting, or replaces the time left before
 
 Outsiders change the fight by submitting an order: which participant, and which action. The action carries its three durations and the work to do when the active window opens and closes.
 
-The first order source is a local menu. While time is frozen it selects a part, then an action, and the prompt shows only that step. The same four keys do both. P1 uses Q, W, E, and R. P2 uses U, I, O, and P. The fourth key returns to the part step. The choices match the flow figure in [combat-flow.md](../docs/combat-flow.md):
+The first order source is a local menu. While time is frozen, a horizontal row of buttons shows the current step. Choosing a part puts that name on a label and swaps the row to that part's actions. Back returns to the parts. The choices match the flow figure in [combat-flow.md](../docs/combat-flow.md):
 
 - Head: Attack.
 - Left arm: Attack, Brace, or Parry.
@@ -65,9 +65,9 @@ There is no special "the player" inside `CombatClock`. Adding someone is registe
 | --- | --- | --- |
 | Who is fighting | One test participant, then a second | Ringbots, and anything else that can wait and commit |
 | Who may freeze time | Human-owned participants block | A different mode can change the flag |
-| How an order is chosen | Four keys per human. Part, then that part's action | A CPU policy, then a remote source |
-| What an action does | Attack, Brace, Parry, Move with fixed durations | The eight action categories, techniques, real formulas |
-| How the fight is drawn | Two colored cubes on the debug grid. The phase line sits on the cube. The current step sits at the bottom of the screen | The joint tree in Ringbot body |
+| How an order is chosen | Buttons along the bottom. Part, then that part's action | A CPU policy, a replay, then a remote source |
+| What an action does | Attack, Brace, and Parry use fixed durations. Move stores a destination; start-up is the turn and active time is the slide | The eight action categories, techniques, real formulas |
+| How the fight is drawn | One cube on the debug grid. A camera controller follows the subject group. Its spring arm orbits and zooms within a minimum pitch and a distance range. The fight scene does not move the camera | The joint tree in Ringbot body |
 
 Build this split while there is still one participant. The menu and the marker can be thrown away. The pause rule and the phase timing in `CombatClock` stay.
 
@@ -79,7 +79,7 @@ Every joint stays in the tree. A clip only keys the joints for the parts that ar
 
 The first body is one base set: body, head, both arms, and one leg set, built from untextured stretched cubes. Each mesh shares the rest orientation of its joint, so a swap is parenting a different child there. More parts come later, as movement options or as features on the same joints. An arm cannon or an arm sword is another mesh on the arm. Wheels, treads, and a multi-leg set are their own joints and their own clips. The body, head, and arms stay on the shared joints.
 
-This stays outside `CombatClock`. The two cubes stand in until the pause and the resume are obvious. The debug grid is tiled on the floor and walls. On a cube it is drawn once per face, and each surface gets its own albedo color.
+This stays outside `CombatClock`. The one cube stands in until the pause and the resume are obvious. The debug grid is tiled on the floor. On a cube it is drawn once per face, and each surface gets its own albedo color.
 
 ## Build order
 
@@ -96,8 +96,26 @@ The second person is another order source on the same `CombatClock`. No sockets,
 
 Two controllers on the same machine are enough to play the fight. A remote source can send those same orders later, when the group is testing from the browser. The transport stays outside `CombatClock`.
 
+## Replays
+
+A finished fight can be watched again in full, frame for frame, with the decision pauses left out. The replay is another order source. It submits the recorded orders when the clock pauses, then lets time run. The people who first played it are not in that room.
+
+What gets saved is the starting state and each accepted order, stamped with the simulation frame it was accepted on. The stamp counts frames `tick` actually advanced. Time spent choosing a part is not a frame, so it is not in the file. The payload stays data the scene can read. The key presses that only moved the menu stay out of the file.
+
+Playback ticks one frame at a time, the same way a live fight does while it is running. Boot time and hitstop are combat frames, so they stay in the watch. Anything that moves a participant has to come from an order and from `tick`. A later physics body, or a random roll with no seed, would make the same file play differently.
+
+The game keeps those files so a fight can be saved, opened again, and handed to someone else. That library waits. The clock does not grow a second timeline for it.
+
+## Ground move
+
+Choosing Move aims on the floor. A ring is the farthest the stand-in travel rate can go. The pointer shows a line and a circle, and that point stays inside the ring. A click commits the point. Back cancels.
+
+The bot turns first, then moves straight. Turn rate and travel rate are separate. A normal bot turns 30 degrees a frame. Travel is 0.25 world units per point of travel rate per frame, for at most 14 frames. A shorter point uses the same speed and fewer frames. Those numbers are stand-ins and can change. The order stores the destination and the frame counts. Start-up is the turn. Active time is the slide. Wind-down is 0 until a recovery is chosen.
+
+The aim marker is its own scene. The fight tells it the center and the reach, and does not draw the ring. The clock does not know the floor. Each step comes from that order and from `tick`.
+
 ## Stand-ins
 
-Durations on Attack, Brace, Parry, and Move are fixed numbers chosen for the prototype. The design document lists inputs for these times and does not yet give formulas. Those numbers live with the stub actions, not in the transcribed rules.
+Durations on Attack, Brace, and Parry are fixed numbers chosen for the prototype. The design document lists inputs for these times and does not yet give formulas. Those numbers live with the stub actions, not in the transcribed rules. The move rates above are the same kind of stand-in.
 
 The eight action categories, techniques, status conditions, and derived combat values stay in `docs/` until `CombatClock` is worth extending.

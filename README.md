@@ -2,9 +2,9 @@
 
 A Godot prototype of a top-down combat game. Ringbots fight in real time, and time freezes when one you control is ready for an order.
 
-The design is written down. The Godot project opens on the logo. Enter starts the two-cube fight.
+The design is written down. The Godot project opens on the logo. Enter or a click starts the fight.
 
-The build is at [ringbots.bingus.gg](https://ringbots.bingus.gg). Enter starts the fight.
+The build is at [ringbots.bingus.gg](https://ringbots.bingus.gg). Enter or a click starts the fight.
 
 ## Where to read
 

@@ -2,7 +2,7 @@
 # Installs caddy/ringbots.caddy only. Does not edit the board Caddyfile,
 # cloudflared, or any other app.
 # Usage (repo root):
-#   powershell -File scripts/refresh-public.ps1
+#   powershell -File scripts/refresh-public.ps1 [-SshHost zimaboard] [-RemoteDir /srv/ringbots]
 
 param(
 	[string]$SshHost = "zimaboard",

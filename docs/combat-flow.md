@@ -49,4 +49,15 @@ The source says to save this win condition. Victory there is either defeating ev
 
 ## CPU
 
-Opponent behavior is a weighted decision tree. The source schedules it as one of the last prototype tasks. No weights or branches are written, and the combat ideas list after it is still empty.
+Opponent behavior is a weighted decision tree. The source schedules it as one of the last prototype tasks. No weights are written.
+
+Individual incentives, in source order:
+
+- Don't move into an active attack.
+- Brace if able. Parry if able. Prioritize parrying or bracing.
+- Prioritize attacking opponents that would be hit during their start-up or wind-down.
+- Prioritize the highest damage possible, having considered Intent.
+- Prioritize opponents already within scope, to minimize rotating.
+- Prioritize opponents that can be hit again.
+
+The last incentive ends there. The team-level list has no items. The combat ideas list after the CPU notes is still empty.

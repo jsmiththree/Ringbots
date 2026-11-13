@@ -20,6 +20,15 @@ func _process(delta: float) -> void:
 	_prompt.modulate = color
 
 
+func _gui_input(event: InputEvent) -> void:
+	if not (event is InputEventMouseButton):
+		return
+	var button_event: InputEventMouseButton = event as InputEventMouseButton
+	if button_event.button_index != MOUSE_BUTTON_LEFT or not button_event.pressed:
+		return
+	_start_fight()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey):
 		return
@@ -28,4 +37,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if key_event.keycode != KEY_ENTER and key_event.keycode != KEY_KP_ENTER:
 		return
+	_start_fight()
+
+
+func _start_fight() -> void:
 	get_tree().change_scene_to_file("res://scenes/fight.tscn")

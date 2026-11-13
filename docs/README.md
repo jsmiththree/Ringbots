@@ -15,7 +15,6 @@ Left in the source document:
 - Setting prose.
 - The worldbuilding ideas parking lot (transhumanism, time travel).
 - The combat ideas parking lot, which is still empty in the source.
-- User interface. Section 5 names a Main Menu and leaves the next item blank.
 
 Setting 2 combat (protect the Ringfighter, third-party interruptions) is recorded only as deferred. The source marks that win condition as later work.
 
@@ -23,7 +22,7 @@ Setting 2 combat (protect the Ringfighter, third-party interruptions) is recorde
 
 | File | What it holds |
 | --- | --- |
-| [components.md](components.md) | The six parts, armour model, teams, deployment, match and forfeit rules |
+| [components.md](components.md) | The six parts, body segments, armour model, teams, deployment, match and forfeit rules |
 | [stats.md](stats.md) | Base stats and which part contributes which stats |
 | [actions.md](actions.md) | The eight action categories, their scopes, and quirks |
 | [techniques.md](techniques.md) | Technique effects on Head and Arm actions |
@@ -50,4 +49,5 @@ These are transcribed as written. No formulas or missing stats were filled in.
 - Action scopes have no angles or distances. "Specified factor" on techniques and on Clash has no number.
 - Parry is defined as a term and referenced by Defend and Bind. It has no full timing or input spec.
 - The deployment distance still has no number. The starting layout is the figure in [components.md](components.md).
-- CPU behavior is a weighted decision tree and is planned last. No tree is written.
+- CPU behavior is a weighted decision tree and is planned last. Six individual incentives are listed, and the last one is an unfinished sentence. The team-level list is empty. No weights are written.
+- Representative robot segments are named in [components.md](components.md). The source does not say how they connect, which component owns which segment, or how a segment moves.
