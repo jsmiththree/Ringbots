@@ -28,6 +28,8 @@ The prototype is top-down. The four parts that have Armour are drawn: Head, left
 
 Part color shows that part's current Armour. A part works at full function until it is destroyed. Destroyed means Armour has reached 0. Further damage to a destroyed part does nothing, except on the Head, where damage to the unarmoured head defeats the Ringbot.
 
+Source section 5 names representative segments: Head, Torso, Waist, Thigh, Calf, Foot, Upper Arm, Lower Arm, and Hand. It does not say how they connect, which of the six components owns which segment, or how a segment moves.
+
 ![Armour shown by color: green is fully operational, orange is critically damaged, red is destroyed.](images/top-down-armour-states.png)
 
 ## Teams
