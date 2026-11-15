@@ -1,12 +1,17 @@
 extends Node3D
 
+const MoveProfile = preload("res://combat/move_profile.gd")
+
 signal destination_chosen(point: Vector3)
 
-const SEGMENTS: int = 64
+const SEGMENTS: int = 128
+const MARKER_RADIUS: float = 0.35
+const BAND_WIDTH: float = 0.07
 
 var _active: bool = false
 var _origin: Vector3 = Vector3.ZERO
-var _reach: float = 1.0
+var _facing_degrees: float = 0.0
+var _profile: MoveProfile
 var _chosen: Vector3 = Vector3.ZERO
 var _has_point: bool = false
 
@@ -34,9 +39,10 @@ func set_active(enabled: bool) -> void:
 		_has_point = false
 
 
-func set_range(origin: Vector3, reach: float) -> void:
+func set_move(origin: Vector3, facing_degrees: float, profile: MoveProfile) -> void:
 	_origin = origin
-	_reach = reach
+	_facing_degrees = facing_degrees
+	_profile = profile
 
 
 func _process(_delta: float) -> void:
@@ -81,10 +87,16 @@ func _track_cursor() -> void:
 	hit.y = 0.0
 	var flat_origin: Vector3 = _origin
 	flat_origin.y = 0.0
+	if _profile == null:
+		return
 	var offset: Vector3 = hit - flat_origin
 	var span: float = offset.length()
-	if span > _reach and span > 0.0:
-		offset = offset * (_reach / span)
+	if span > 0.0:
+		var aim_yaw: float = rad_to_deg(atan2(offset.x, offset.z))
+		var turn: float = MoveProfile.shortest_yaw(_facing_degrees, aim_yaw)
+		var limit: float = _profile.reach_at(turn)
+		if span > limit:
+			offset = offset * (limit / span)
 	_chosen = flat_origin + offset
 	_chosen.y = 0.04
 	_has_point = true
@@ -100,14 +112,37 @@ func _redraw() -> void:
 	if not _active:
 		return
 	var ring_at: Vector3 = _origin
-	ring_at.y = 0.02
-	_draw_ring(range_mesh, ring_at, _reach, 0.07, Color(0.55, 0.9, 1.0, 0.9))
+	ring_at.y = 0.05
+	_draw_reach(range_mesh, ring_at, BAND_WIDTH, Color(0.55, 0.9, 1.0, 0.9))
 	if not _has_point:
 		return
 	var from: Vector3 = ring_at
 	from.y = 0.04
-	_draw_segment(marker_mesh, from, _chosen, 0.06, Color(1.0, 1.0, 1.0, 0.95))
-	_draw_ring(marker_mesh, _chosen, 0.35, 0.06, Color(1.0, 0.82, 0.3, 1.0))
+	var toward: Vector3 = _chosen - from
+	toward.y = 0.0
+	var span: float = toward.length()
+	if span > MARKER_RADIUS:
+		var end: Vector3 = _chosen - toward * (MARKER_RADIUS / span)
+		end.y = _chosen.y
+		_draw_segment(marker_mesh, from, end, 0.06, Color(1.0, 1.0, 1.0, 0.95))
+	_draw_ring(marker_mesh, _chosen, MARKER_RADIUS, 0.06, Color(1.0, 0.82, 0.3, 1.0))
+
+
+func _draw_reach(mesh: ImmediateMesh, at: Vector3, width: float, color: Color) -> void:
+	if _profile == null:
+		return
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	mesh.surface_set_color(color)
+	for step: int in SEGMENTS + 1:
+		var relative: float = 360.0 * float(step) / float(SEGMENTS)
+		var turn: float = MoveProfile.shortest_yaw(0.0, relative)
+		var reach: float = _profile.reach_at(turn)
+		var world_yaw: float = deg_to_rad(_facing_degrees + relative)
+		var spoke: Vector3 = Vector3(sin(world_yaw), 0.0, cos(world_yaw))
+		var inner: float = maxf(reach - width, 0.0)
+		mesh.surface_add_vertex(at + spoke * reach)
+		mesh.surface_add_vertex(at + spoke * inner)
+	mesh.surface_end()
 
 
 func _draw_ring(mesh: ImmediateMesh, at: Vector3, reach: float, width: float, color: Color) -> void:
