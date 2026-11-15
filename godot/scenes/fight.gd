@@ -2,6 +2,7 @@ extends Node3D
 
 const Clock = preload("res://combat/combat_clock.gd")
 const Order = preload("res://combat/combat_order.gd")
+const MoveProfile = preload("res://combat/move_profile.gd")
 const GRID: Texture2D = preload("res://assets/textures/debug_grid.png")
 const PLAY_PAUSE: Texture2D = preload("res://assets/sprites/play_pause.png")
 const Aim = preload("res://scenes/move_aim.gd")
@@ -11,10 +12,6 @@ const STATE_FRAME: int = 32
 const ATTACK_LENGTHS: Vector3i = Vector3i(18, 8, 20)
 const BRACE_LENGTHS: Vector3i = Vector3i(10, 16, 12)
 const PARRY_LENGTHS: Vector3i = Vector3i(6, 8, 18)
-const TURN_DEGREES_PER_FRAME: float = 30.0
-const MOVE_MAX_FRAMES: int = 14
-const TRAVEL_RATE: float = 1.0
-const UNITS_PER_TRAVEL_PER_FRAME: float = 0.25
 const FLOOR_SIZE: float = 16.0
 
 var _clock: Clock
@@ -97,15 +94,25 @@ func _confirm_move(point: Vector3) -> void:
 	var distance: float = offset.length()
 	if distance < 0.05:
 		return
-	var step_length: float = TRAVEL_RATE * UNITS_PER_TRAVEL_PER_FRAME
-	var travel_frames: int = clampi(ceili(distance / step_length), 1, MOVE_MAX_FRAMES)
+	var profile: MoveProfile = fighter.move_profile
+	var step_length: float = profile.meters_per_frame()
+	if step_length <= 0.0:
+		return
 	var aim_yaw: float = rad_to_deg(atan2(offset.x, offset.z))
-	var turn: float = _shortest_yaw(fighter.yaw_degrees, aim_yaw)
-	var turn_frames: int = 0
-	if absf(turn) > 0.01:
-		turn_frames = ceili(absf(turn) / TURN_DEGREES_PER_FRAME)
+	var turn: float = MoveProfile.shortest_yaw(fighter.yaw_degrees, aim_yaw)
+	var limit: float = profile.reach_at(turn)
+	if limit < 0.05:
+		return
+	if distance > limit:
+		offset = offset * (limit / distance)
+		distance = limit
+		flat_end = flat_start + offset
+	var turning: int = profile.turn_frames(turn)
+	var travel_frames: int = ceili(distance / step_length)
+	if travel_frames <= 0:
+		return
 	var label: String = "legs move"
-	var order: Order = Order.new(turn_frames, travel_frames, 0, label)
+	var order: Order = Order.new(turning, travel_frames, 0, label)
 	if not _clock.submit_order(fighter.id, order):
 		return
 	fighter.action = "move"
@@ -116,20 +123,8 @@ func _confirm_move(point: Vector3) -> void:
 	fighter.move_yaw = aim_yaw
 	fighter.move_destination = Vector3(flat_end.x, fighter.base_position.y, flat_end.z)
 	fighter.move_step = step_length
+	fighter.turn_step = profile.turn_degrees_per_frame
 	_refresh_view()
-
-
-func _move_reach() -> float:
-	return TRAVEL_RATE * UNITS_PER_TRAVEL_PER_FRAME * float(MOVE_MAX_FRAMES)
-
-
-func _shortest_yaw(from_yaw: float, to_yaw: float) -> float:
-	var delta: float = fmod(to_yaw - from_yaw, 360.0)
-	if delta > 180.0:
-		delta -= 360.0
-	elif delta < -180.0:
-		delta += 360.0
-	return delta
 
 
 func _try_action(fighter: Fighter, action: String) -> void:
@@ -177,14 +172,14 @@ func _step_moves() -> void:
 func _step_turn(fighter: Fighter) -> void:
 	if _clock.time_left(fighter.id) <= 0:
 		return
-	var remaining: float = _shortest_yaw(fighter.yaw_degrees, fighter.move_yaw)
-	if absf(remaining) <= TURN_DEGREES_PER_FRAME:
+	var remaining_yaw: float = MoveProfile.shortest_yaw(fighter.yaw_degrees, fighter.move_yaw)
+	if absf(remaining_yaw) <= fighter.turn_step:
 		fighter.yaw_degrees = fighter.move_yaw
 		return
-	if remaining > 0.0:
-		fighter.yaw_degrees += TURN_DEGREES_PER_FRAME
+	if remaining_yaw > 0.0:
+		fighter.yaw_degrees += fighter.turn_step
 	else:
-		fighter.yaw_degrees -= TURN_DEGREES_PER_FRAME
+		fighter.yaw_degrees -= fighter.turn_step
 	fighter.yaw_degrees = wrapf(fighter.yaw_degrees, -180.0, 180.0)
 
 
@@ -223,7 +218,7 @@ func _refresh_view() -> void:
 	if aiming:
 		var origin: Vector3 = lead.base_position
 		origin.y = 0.0
-		_aim.set_range(origin, _move_reach())
+		_aim.set_move(origin, lead.yaw_degrees, lead.move_profile)
 	if _clock.is_paused():
 		_state.texture = _pause_icon
 	else:
@@ -385,6 +380,7 @@ func _add_fighter(who: String, at: Vector3, color: Color) -> Fighter:
 	fighter.mesh = body
 	fighter.label = label
 	fighter.base_position = at
+	fighter.move_profile = MoveProfile.new()
 	return fighter
 
 
@@ -426,4 +422,6 @@ class Fighter extends RefCounted:
 	var active_length: int = 0
 	var move_yaw: float = 0.0
 	var move_destination: Vector3 = Vector3.ZERO
+	var move_profile: MoveProfile
 	var move_step: float = 0.0
+	var turn_step: float = 0.0

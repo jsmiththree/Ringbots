@@ -108,9 +108,9 @@ The game keeps those files so a fight can be saved, opened again, and handed to 
 
 ## Ground move
 
-Choosing Move aims on the floor. A ring is the farthest the stand-in travel rate can go. The pointer shows a line and a circle, and that point stays inside the ring. A click commits the point. Back cancels.
+Choosing Move aims on the floor. The outline is the reach in every direction. The pointer shows a line and a circle, and that point stays inside the outline. A click commits the point. Back cancels.
 
-The bot turns first, then moves straight. Turn rate and travel rate are separate. A normal bot turns 30 degrees a frame. Travel is 0.25 world units per point of travel rate per frame, for at most 14 frames. A shorter point uses the same speed and fewer frames. Those numbers are stand-ins and can change. The order stores the destination and the frame counts. Start-up is the turn. Active time is the slide. Wind-down is 0 until a recovery is chosen.
+The bot turns first, then moves straight. Turn rate and travel rate are separate fields on a move profile, so a later part can fill them. The stand-in profile turns 15 degrees a frame, and at a travel rate of 1 it can cover 4 meters in 28 frames when it is already facing that way. Turning still shortens the reach, and the profile removes 30 percent of that front-to-back drop so the rear point is skimmed into an arc. The forward point stays. The outline and the committed point use that same reach. A shorter point uses the same speed and fewer frames. The order stores the destination and the frame counts. Start-up is the turn. Active time is the slide. Wind-down is 0 until a recovery is chosen.
 
 The aim marker is its own scene. The fight tells it the center and the reach, and does not draw the ring. The clock does not know the floor. Each step comes from that order and from `tick`.
 
