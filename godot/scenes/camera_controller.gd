@@ -1,6 +1,7 @@
 extends Node3D
 
-const SUBJECT_GROUP: String = "camera_subject"
+const PAN_SPEED: float = 12.0
+const FRAME_SHARPNESS: float = 6.0
 
 @export var distance: float = 12.9
 @export var min_distance: float = 3.0
@@ -15,26 +16,63 @@ const SUBJECT_GROUP: String = "camera_subject"
 @onready var _arm: SpringArm3D = %Arm
 
 var _orbiting: bool = false
+var _focus: Vector3 = Vector3.ZERO
+var _ease_target: Vector3 = Vector3.ZERO
+var _easing: bool = false
 
 
 func _ready() -> void:
 	distance = clampf(distance, min_distance, max_distance)
 	pitch_degrees = clampf(pitch_degrees, min_pitch_degrees, max_pitch_degrees)
+	_focus = global_position
 	_aim_arm()
 
 
-func _process(_delta: float) -> void:
-	var subject: Node3D = _subject()
-	if subject == null:
-		return
-	global_position = subject.global_position
+func frame_at(point: Vector3) -> void:
+	_ease_target = point
+	_easing = true
+
+
+func _process(delta: float) -> void:
+	var pan: Vector2 = Vector2.ZERO
+	if Controls.held(Controls.CAMERA_RIGHT):
+		pan.x += 1.0
+	if Controls.held(Controls.CAMERA_LEFT):
+		pan.x -= 1.0
+	if Controls.held(Controls.CAMERA_FORWARD):
+		pan.y += 1.0
+	if Controls.held(Controls.CAMERA_BACK):
+		pan.y -= 1.0
+	if pan.length_squared() > 0.0:
+		_easing = false
+		if pan.length_squared() > 1.0:
+			pan = pan.normalized()
+		var yaw: float = deg_to_rad(yaw_degrees)
+		var forward: Vector3 = Vector3(-sin(yaw), 0.0, -cos(yaw))
+		var right: Vector3 = Vector3(cos(yaw), 0.0, -sin(yaw))
+		_focus += (right * pan.x + forward * pan.y) * PAN_SPEED * delta
+	if _easing:
+		var blend: float = 1.0 - exp(-FRAME_SHARPNESS * delta)
+		_focus = _focus.lerp(_ease_target, blend)
+		if _focus.distance_to(_ease_target) < 0.02:
+			_focus = _ease_target
+			_easing = false
+	global_position = _focus
 	_aim_arm()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		_pointer_button(event as InputEventMouseButton)
-		return
+	var orbiting: bool = Controls.held(Controls.CAMERA_ORBIT)
+	if orbiting != _orbiting:
+		_orbiting = orbiting
+		if _orbiting:
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		else:
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if Controls.consume_press(Controls.CAMERA_ZOOM_IN):
+		distance = clampf(distance - zoom_step, min_distance, max_distance)
+	elif Controls.consume_press(Controls.CAMERA_ZOOM_OUT):
+		distance = clampf(distance + zoom_step, min_distance, max_distance)
 	if not _orbiting or not (event is InputEventMouseMotion):
 		return
 	var motion: InputEventMouseMotion = event as InputEventMouseMotion
@@ -50,22 +88,6 @@ func _notification(what: int) -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
 
-func _pointer_button(button_event: InputEventMouseButton) -> void:
-	if button_event.button_index == MOUSE_BUTTON_RIGHT:
-		_orbiting = button_event.pressed
-		if _orbiting:
-			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		else:
-			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
-		return
-	if not button_event.pressed:
-		return
-	if button_event.button_index == MOUSE_BUTTON_WHEEL_UP:
-		distance = clampf(distance - zoom_step, min_distance, max_distance)
-	elif button_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-		distance = clampf(distance + zoom_step, min_distance, max_distance)
-
-
 func _aim_arm() -> void:
 	var yaw: float = deg_to_rad(yaw_degrees)
 	var pitch: float = deg_to_rad(pitch_degrees)
@@ -79,10 +101,3 @@ func _aim_arm() -> void:
 	var y_axis: Vector3 = z_axis.cross(x_axis)
 	_arm.spring_length = distance
 	_arm.global_basis = Basis(x_axis, y_axis, z_axis)
-
-
-func _subject() -> Node3D:
-	var found: Array = get_tree().get_nodes_in_group(SUBJECT_GROUP)
-	if found.is_empty():
-		return null
-	return found[0] as Node3D

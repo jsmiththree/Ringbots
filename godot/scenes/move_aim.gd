@@ -59,13 +59,10 @@ func _process(_delta: float) -> void:
 	_redraw()
 
 
-func _unhandled_input(event: InputEvent) -> void:
+func _unhandled_input(_event: InputEvent) -> void:
 	if not _active or not _has_point:
 		return
-	if not (event is InputEventMouseButton):
-		return
-	var button_event: InputEventMouseButton = event as InputEventMouseButton
-	if button_event.button_index != MOUSE_BUTTON_LEFT or not button_event.pressed:
+	if not Controls.consume_press(Controls.POINTER):
 		return
 	var flat_origin: Vector3 = _origin
 	flat_origin.y = 0.0
@@ -241,6 +238,8 @@ func _draw_dashed(mesh: ImmediateMesh, points: PackedVector3Array, closed: bool,
 	var half_width: float = width * 0.5
 	var remaining: float = dash
 	var drawing: bool = true
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	mesh.surface_set_color(color)
 	for edge: int in edges:
 		var next_index: int = (edge + 1) % count
 		var start: Vector3 = points[edge]
@@ -254,24 +253,28 @@ func _draw_dashed(mesh: ImmediateMesh, points: PackedVector3Array, closed: bool,
 			if drawing and step_length > 0.0001:
 				var start_mark: Vector3 = start.lerp(finish, walked / edge_length)
 				var end_mark: Vector3 = start.lerp(finish, (walked + step_length) / edge_length)
-				_draw_quad(mesh, start_mark, end_mark, half_width, color)
+				_add_quad(mesh, start_mark, end_mark, half_width)
 			walked += step_length
 			remaining -= step_length
 			if remaining <= 0.00005:
 				drawing = not drawing
 				remaining = dash if drawing else gap
+	mesh.surface_end()
 
 
-func _draw_quad(mesh: ImmediateMesh, start: Vector3, finish: Vector3, half_width: float, color: Color) -> void:
+func _add_quad(mesh: ImmediateMesh, start: Vector3, finish: Vector3, half_width: float) -> void:
 	var delta: Vector3 = finish - start
 	delta.y = 0.0
 	if delta.length() < 0.001:
 		return
 	var side: Vector3 = Vector3(-delta.z, 0.0, delta.x).normalized() * half_width
-	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	mesh.surface_set_color(color)
-	mesh.surface_add_vertex(start - side)
-	mesh.surface_add_vertex(start + side)
-	mesh.surface_add_vertex(finish - side)
-	mesh.surface_add_vertex(finish + side)
-	mesh.surface_end()
+	var left_start: Vector3 = start - side
+	var right_start: Vector3 = start + side
+	var left_finish: Vector3 = finish - side
+	var right_finish: Vector3 = finish + side
+	mesh.surface_add_vertex(left_start)
+	mesh.surface_add_vertex(right_start)
+	mesh.surface_add_vertex(right_finish)
+	mesh.surface_add_vertex(left_start)
+	mesh.surface_add_vertex(right_finish)
+	mesh.surface_add_vertex(left_finish)
