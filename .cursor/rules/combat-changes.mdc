@@ -1,0 +1,16 @@
+---
+description: Deterministic, input-driven combat changes
+alwaysApply: true
+---
+
+# Combat changes
+
+Every change, including a stand-in or an experiment, stays deterministic, input driven, modular, and clean. A desync is a bug in the change that introduced a second source of truth.
+
+- The same starting state and the same inputs produce the same fight. No unseeded randomness. Nothing that moves a bot comes from the wall clock.
+- A player, CPU, or remote order carries every fact that order chose. A move carries the kind, the part, and the destination. A touch carries the kind, the part, and the aim yaw. Profiles stay on the bot. Frame counts are derived when that order is accepted.
+- A reaction is not an input. The hook that the causing order already runs builds it again. A replay stores the starting state and the chosen orders, then lets those hooks run.
+- The step reads the order. Do not keep a second copy of the destination, the aim, or the step on the fighter.
+- The clock does not know the floor, the cones, or the profiles. Scenes do not reach into each other by node path.
+
+A payload that is only a label, while the destination or the aim sits on the fighter, is the mistake. The hit and the turn read the same payload.

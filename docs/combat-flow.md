@@ -60,4 +60,8 @@ Individual incentives, in source order:
 - Prioritize opponents already within scope, to minimize rotating.
 - Prioritize opponents that can be hit again.
 
-The last incentive ends there. The team-level list has no items. The combat ideas list after the CPU notes is still empty.
+The last incentive ends there. The team-level list has no items.
+
+## Combat ideas
+
+The source keeps a combat ideas parking lot after the CPU notes. It has one item: parts can only be targets of actions if that part would be within the user's Scope at the point at which the action's ATV state begins.

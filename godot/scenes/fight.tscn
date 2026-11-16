@@ -3,13 +3,17 @@
 [ext_resource type="Script" uid="uid://cf7b8houbd1gk" path="res://scenes/fight.gd" id="1_fight"]
 [ext_resource type="PackedScene" path="res://scenes/camera_controller.tscn" id="2_camera"]
 [ext_resource type="PackedScene" path="res://scenes/move_aim.tscn" id="3_aim"]
+[ext_resource type="PackedScene" path="res://scenes/attack_aim.tscn" id="4_attack"]
 
 [node name="Fight" type="Node3D" unique_id=185875409]
 script = ExtResource("1_fight")
 
 [node name="CameraController" parent="." unique_id=1578858400 instance=ExtResource("2_camera")]
 
-[node name="MoveAim" parent="." instance=ExtResource("3_aim")]
+[node name="MoveAim" parent="." unique_id=2080996455 instance=ExtResource("3_aim")]
+unique_name_in_owner = true
+
+[node name="AttackAim" parent="." unique_id=2142023580 instance=ExtResource("4_attack")]
 unique_name_in_owner = true
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=1409874682]

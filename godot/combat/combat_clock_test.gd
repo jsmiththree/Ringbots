@@ -11,7 +11,7 @@ func _initialize() -> void:
 	var failed: int = 0
 	failed += _checked(_test_pause_holds_until_an_order())
 	failed += _checked(_test_phases_share_one_timeline())
-	failed += _checked(_test_second_blocker_holds_time())
+	failed += _checked(_test_second_participant_holds_time())
 	failed += _checked(_test_active_result_cancels_and_pauses())
 	failed += _checked(_test_replace_becomes_wind_down())
 	failed += _checked(_test_rejected_orders())
@@ -27,7 +27,7 @@ func _test_pause_holds_until_an_order() -> int:
 	var clock: Clock = Clock.new()
 	var id: int = clock.add_participant(true)
 	if not clock.is_paused():
-		return _fail("a blocking waiter should pause")
+		return _fail("a waiter that holds time should pause")
 	clock.tick(4)
 	if clock.phase_of(id) != Clock.Phase.WAITING:
 		return _fail("tick while paused should not leave waiting")
@@ -39,7 +39,7 @@ func _test_pause_holds_until_an_order() -> int:
 	if not clock.submit_order(id, order):
 		return _fail("order should be accepted from waiting")
 	if clock.is_paused():
-		return _fail("the only blocker has an order, so time can run")
+		return _fail("the only participant that holds time has an order, so time can run")
 	clock.tick(1)
 	if opened[0] != 1 or clock.phase_of(id) != Clock.Phase.ADR:
 		return _fail("zero start-up should open the active window on the first tick")
@@ -68,11 +68,11 @@ func _test_phases_share_one_timeline() -> int:
 		return _fail("finishing the active length should close it and enter wind-down")
 	clock.tick(1)
 	if clock.phase_of(id) != Clock.Phase.WAITING or not clock.is_paused():
-		return _fail("wind-down should return a blocker to waiting and pause")
+		return _fail("wind-down should return a participant that holds time to waiting and pause")
 	return 0
 
 
-func _test_second_blocker_holds_time() -> int:
+func _test_second_participant_holds_time() -> int:
 	var clock: Clock = Clock.new()
 	var first: int = clock.add_participant(true)
 	var second: int = clock.add_participant(true)
@@ -104,7 +104,7 @@ func _test_active_result_cancels_and_pauses() -> int:
 	if clock.phase_of(actor) != Clock.Phase.ADR or clock.time_left(actor) != 1:
 		return _fail("the actor should be in the active window with its frame left")
 	if clock.phase_of(target) != Clock.Phase.WAITING or not clock.is_paused():
-		return _fail("cancelling a blocker should pause")
+		return _fail("cancelling a participant that holds time should pause")
 	clock.tick(2)
 	if clock.time_left(actor) != 1 or clock.phase_of(actor) != Clock.Phase.ADR:
 		return _fail("the pause should keep the active frame that was left")
@@ -123,7 +123,7 @@ func _test_replace_becomes_wind_down() -> int:
 	if clock.phase_of(target) != Clock.Phase.WND or clock.time_left(target) != 3:
 		return _fail("replace should set wind-down frames")
 	if clock.is_paused():
-		return _fail("a non-blocking participant should not pause the clock")
+		return _fail("a participant that does not hold time should not pause the clock")
 	clock.tick(1)
 	if clock.time_left(target) != 2:
 		return _fail("replaced wind-down should spend with the timeline")

@@ -6,12 +6,19 @@ signal destination_chosen(point: Vector3)
 
 const SEGMENTS: int = 128
 const MARKER_RADIUS: float = 0.35
-const BAND_WIDTH: float = 0.07
+const LINE_WIDTH: float = 0.04
+const DASH_LENGTH: float = 0.16
+const GAP_LENGTH: float = 0.14
+const TARGET_COLOR: Color = Color(1.0, 0.82, 0.3, 1.0)
+const REACH_COLOR: Color = Color(1.0, 0.82, 0.3, 0.35)
+const BLOCKED_COLOR: Color = Color(1.0, 0.45, 0.08, 1.0)
 
 var _active: bool = false
 var _origin: Vector3 = Vector3.ZERO
 var _facing_degrees: float = 0.0
 var _profile: MoveProfile
+var _blocked_centers: PackedVector3Array = PackedVector3Array()
+var _blocked_radii: PackedFloat32Array = PackedFloat32Array()
 var _chosen: Vector3 = Vector3.ZERO
 var _has_point: bool = false
 
@@ -39,10 +46,12 @@ func set_active(enabled: bool) -> void:
 		_has_point = false
 
 
-func set_move(origin: Vector3, facing_degrees: float, profile: MoveProfile) -> void:
+func set_move(origin: Vector3, facing_degrees: float, profile: MoveProfile, blocked_centers: PackedVector3Array, blocked_radii: PackedFloat32Array) -> void:
 	_origin = origin
 	_facing_degrees = facing_degrees
 	_profile = profile
+	_blocked_centers = blocked_centers
+	_blocked_radii = blocked_radii
 
 
 func _process(_delta: float) -> void:
@@ -97,8 +106,12 @@ func _track_cursor() -> void:
 		var limit: float = _profile.reach_at(turn)
 		if span > limit:
 			offset = offset * (limit / span)
-	_chosen = flat_origin + offset
-	_chosen.y = 0.04
+	var chosen: Vector3 = flat_origin + offset
+	for index: int in _blocked_centers.size():
+		var clearance: float = _blocked_radii[index] + MARKER_RADIUS
+		chosen = stop_before(flat_origin, chosen, _blocked_centers[index], clearance)
+	chosen.y = 0.04
+	_chosen = chosen
 	_has_point = true
 
 
@@ -113,7 +126,8 @@ func _redraw() -> void:
 		return
 	var ring_at: Vector3 = _origin
 	ring_at.y = 0.05
-	_draw_reach(range_mesh, ring_at, BAND_WIDTH, Color(0.55, 0.9, 1.0, 0.9))
+	_draw_reach(range_mesh, ring_at, LINE_WIDTH, REACH_COLOR)
+	_draw_blocked(range_mesh)
 	if not _has_point:
 		return
 	var from: Vector3 = ring_at
@@ -124,25 +138,68 @@ func _redraw() -> void:
 	if span > MARKER_RADIUS:
 		var end: Vector3 = _chosen - toward * (MARKER_RADIUS / span)
 		end.y = _chosen.y
-		_draw_segment(marker_mesh, from, end, 0.06, Color(1.0, 1.0, 1.0, 0.95))
-	_draw_ring(marker_mesh, _chosen, MARKER_RADIUS, 0.06, Color(1.0, 0.82, 0.3, 1.0))
+		var path: PackedVector3Array = PackedVector3Array()
+		path.append(from)
+		path.append(end)
+		_draw_dashed(marker_mesh, path, false, LINE_WIDTH, TARGET_COLOR)
+	_draw_ring(marker_mesh, _chosen, MARKER_RADIUS, 0.06, TARGET_COLOR)
+
+
+static func stop_before(start: Vector3, end: Vector3, center: Vector3, radius: float) -> Vector3:
+	var flat_start: Vector3 = start
+	flat_start.y = 0.0
+	var flat_end: Vector3 = end
+	flat_end.y = 0.0
+	var flat_center: Vector3 = center
+	flat_center.y = 0.0
+	var offset: Vector3 = flat_end - flat_start
+	var span: float = offset.length()
+	if span < 0.0001 or radius <= 0.0:
+		return end
+	var direction: Vector3 = offset / span
+	var from_start: Vector3 = flat_center - flat_start
+	var along: float = from_start.dot(direction)
+	var closest_sq: float = from_start.length_squared() - along * along
+	var radius_sq: float = radius * radius
+	if closest_sq >= radius_sq:
+		return end
+	var half_chord: float = sqrt(maxf(radius_sq - closest_sq, 0.0))
+	var entry: float = along - half_chord
+	if entry <= 0.0 or entry >= span:
+		return end
+	var stopped: Vector3 = flat_start + direction * entry
+	stopped.y = end.y
+	return stopped
+
+
+func _draw_blocked(mesh: ImmediateMesh) -> void:
+	for index: int in _blocked_centers.size():
+		var radius: float = _blocked_radii[index]
+		if radius <= 0.0:
+			continue
+		var center: Vector3 = _blocked_centers[index]
+		center.y = 0.06
+		var points: PackedVector3Array = PackedVector3Array()
+		points.resize(SEGMENTS)
+		for step: int in SEGMENTS:
+			var angle: float = TAU * float(step) / float(SEGMENTS)
+			points[step] = center + Vector3(sin(angle), 0.0, cos(angle)) * radius
+		_draw_dashed(mesh, points, true, LINE_WIDTH, BLOCKED_COLOR)
 
 
 func _draw_reach(mesh: ImmediateMesh, at: Vector3, width: float, color: Color) -> void:
 	if _profile == null:
 		return
-	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
-	mesh.surface_set_color(color)
-	for step: int in SEGMENTS + 1:
+	var points: PackedVector3Array = PackedVector3Array()
+	points.resize(SEGMENTS)
+	for step: int in SEGMENTS:
 		var relative: float = 360.0 * float(step) / float(SEGMENTS)
 		var turn: float = MoveProfile.shortest_yaw(0.0, relative)
 		var reach: float = _profile.reach_at(turn)
 		var world_yaw: float = deg_to_rad(_facing_degrees + relative)
 		var spoke: Vector3 = Vector3(sin(world_yaw), 0.0, cos(world_yaw))
-		var inner: float = maxf(reach - width, 0.0)
-		mesh.surface_add_vertex(at + spoke * reach)
-		mesh.surface_add_vertex(at + spoke * inner)
-	mesh.surface_end()
+		points[step] = at + spoke * reach
+	_draw_dashed(mesh, points, true, width, color)
 
 
 func _draw_ring(mesh: ImmediateMesh, at: Vector3, reach: float, width: float, color: Color) -> void:
@@ -158,16 +215,63 @@ func _draw_ring(mesh: ImmediateMesh, at: Vector3, reach: float, width: float, co
 	mesh.surface_end()
 
 
-func _draw_segment(mesh: ImmediateMesh, from: Vector3, to: Vector3, width: float, color: Color) -> void:
-	var delta: Vector3 = to - from
+func _draw_dashed(mesh: ImmediateMesh, points: PackedVector3Array, closed: bool, width: float, color: Color) -> void:
+	var count: int = points.size()
+	if count < 2:
+		return
+	var edges: int = count if closed else count - 1
+	var lengths: PackedFloat32Array = PackedFloat32Array()
+	lengths.resize(edges)
+	var total: float = 0.0
+	for edge: int in edges:
+		var next_index: int = (edge + 1) % count
+		var edge_length: float = points[edge].distance_to(points[next_index])
+		lengths[edge] = edge_length
+		total += edge_length
+	if total < 0.001:
+		return
+	var dash: float = DASH_LENGTH
+	var gap: float = GAP_LENGTH
+	if closed:
+		var period: float = dash + gap
+		var repeats: int = maxi(1, roundi(total / period))
+		var fitted: float = total / float(repeats)
+		dash = fitted * (DASH_LENGTH / period)
+		gap = fitted - dash
+	var half_width: float = width * 0.5
+	var remaining: float = dash
+	var drawing: bool = true
+	for edge: int in edges:
+		var next_index: int = (edge + 1) % count
+		var start: Vector3 = points[edge]
+		var finish: Vector3 = points[next_index]
+		var edge_length: float = lengths[edge]
+		if edge_length < 0.0001:
+			continue
+		var walked: float = 0.0
+		while walked < edge_length - 0.00005:
+			var step_length: float = minf(edge_length - walked, remaining)
+			if drawing and step_length > 0.0001:
+				var start_mark: Vector3 = start.lerp(finish, walked / edge_length)
+				var end_mark: Vector3 = start.lerp(finish, (walked + step_length) / edge_length)
+				_draw_quad(mesh, start_mark, end_mark, half_width, color)
+			walked += step_length
+			remaining -= step_length
+			if remaining <= 0.00005:
+				drawing = not drawing
+				remaining = dash if drawing else gap
+
+
+func _draw_quad(mesh: ImmediateMesh, start: Vector3, finish: Vector3, half_width: float, color: Color) -> void:
+	var delta: Vector3 = finish - start
 	delta.y = 0.0
 	if delta.length() < 0.001:
 		return
-	var side: Vector3 = Vector3(-delta.z, 0.0, delta.x).normalized() * (width * 0.5)
+	var side: Vector3 = Vector3(-delta.z, 0.0, delta.x).normalized() * half_width
 	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 	mesh.surface_set_color(color)
-	mesh.surface_add_vertex(from - side)
-	mesh.surface_add_vertex(from + side)
-	mesh.surface_add_vertex(to - side)
-	mesh.surface_add_vertex(to + side)
+	mesh.surface_add_vertex(start - side)
+	mesh.surface_add_vertex(start + side)
+	mesh.surface_add_vertex(finish - side)
+	mesh.surface_add_vertex(finish + side)
 	mesh.surface_end()
