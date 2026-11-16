@@ -11,36 +11,117 @@ const ReactionInput = preload("res://combat/reaction_input.gd")
 const PushbackProfile = preload("res://combat/pushback_profile.gd")
 const GRID: Texture2D = preload("res://assets/textures/debug_grid.png")
 const PLAY_PAUSE: Texture2D = preload("res://assets/sprites/play_pause.png")
+const ARROWS: Texture2D = preload("res://assets/sprites/left_right_arrows.png")
 const Aim = preload("res://scenes/move_aim.gd")
 const AttackAim = preload("res://scenes/attack_aim.gd")
+const CameraRig = preload("res://scenes/camera_controller.gd")
+const AwaitRing = preload("res://scenes/await_ring.gd")
 const STATE_FRAME: int = 32
 const SAME_CENTERING_DEGREES: float = 0.01
 const FLOOR_SIZE: float = 16.0
+const SPAWN_RADIUS: float = 6.0
+const SPAWN_GAP: float = 0.3
+const ARROW_HOVER: Color = Color(0.5, 0.5, 0.5)
+const ARROW_PRESSED: Color = Color(0.0, 0.0, 0.0)
 
 var _clock: Clock
 var _fighters: Array = []
 var _menu_step: String = ""
 var _pause_icon: AtlasTexture
 var _play_icon: AtlasTexture
+var _framed_id: int = -1
+var _lead_id: int = -1
+var _layout_seed: int = 0
 
 @onready var _state: TextureRect = %Icon
 @onready var _choice: Label = %Choice
 @onready var _options: HBoxContainer = %Options
 @onready var _aim: Aim = %MoveAim
 @onready var _attack_aim: AttackAim = %AttackAim
+@onready var _camera: CameraRig = %CameraController
+@onready var _await_ring: AwaitRing = %AwaitRing
+@onready var _previous_bot: TextureButton = %PreviousBot
+@onready var _next_bot: TextureButton = %NextBot
 
 
 func _ready() -> void:
-	_pause_icon = _sheet_frame(STATE_FRAME)
-	_play_icon = _sheet_frame(0)
+	_pause_icon = _sheet_frame(PLAY_PAUSE, STATE_FRAME)
+	_play_icon = _sheet_frame(PLAY_PAUSE, 0)
+	_previous_bot.texture_normal = _sheet_frame(ARROWS, 0)
+	_next_bot.texture_normal = _sheet_frame(ARROWS, STATE_FRAME)
+	_previous_bot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_next_bot.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	_previous_bot.pressed.connect(_cycle_lead.bind(-1))
+	_next_bot.pressed.connect(_cycle_lead.bind(1))
+	_bind_arrow(_previous_bot)
+	_bind_arrow(_next_bot)
 	_aim.destination_chosen.connect(_confirm_move)
 	_attack_aim.direction_chosen.connect(_confirm_touch)
 	_add_room()
 	_clock = Clock.new()
-	_fighters.append(_add_fighter("P1", Vector3(0, 0.5, 0), Color(0.25, 0.75, 1.0), true))
-	var sandbag: Fighter = _add_fighter("Sandbag", Vector3(0, 0.5, 3), Color.WHITE, false)
-	sandbag.yaw_degrees = 180.0
-	_fighters.append(sandbag)
+	var roster: Array = []
+	roster.append(_add_fighter("P1", Vector3(0.0, 0.5, 0.0), Color(0.25, 0.75, 1.0), true))
+	roster.append(_add_fighter("P2", Vector3(0.0, 0.5, 0.0), Color(0.72, 0.42, 0.95), true))
+	roster.append(_add_fighter("Sandbag", Vector3(0.0, 0.5, 0.0), Color.WHITE, false))
+	roster.append(_add_fighter("Sandbag 2", Vector3(0.0, 0.5, 0.0), Color.WHITE, false))
+	_scatter(roster)
+	for fighter: Fighter in roster:
+		_fighters.append(fighter)
+	_lead_id = roster[0].id
+	_refresh_view()
+
+
+func _bind_arrow(button: TextureButton) -> void:
+	button.mouse_entered.connect(_arrow_hover.bind(button, true))
+	button.mouse_exited.connect(_arrow_hover.bind(button, false))
+	button.button_down.connect(_arrow_press.bind(button, true))
+	button.button_up.connect(_arrow_press.bind(button, false))
+
+
+func _arrow_hover(button: TextureButton, inside: bool) -> void:
+	if button.button_pressed:
+		return
+	button.self_modulate = ARROW_HOVER if inside else Color.WHITE
+
+
+func _arrow_press(button: TextureButton, down: bool) -> void:
+	if down:
+		button.self_modulate = ARROW_PRESSED
+		return
+	button.self_modulate = ARROW_HOVER if button.is_hovered() else Color.WHITE
+
+
+func _lead() -> Fighter:
+	return _fighter_by_id(_lead_id)
+
+
+func _sync_lead() -> void:
+	var ids: Array = _clock.waiting_ids()
+	if ids.is_empty():
+		return
+	if ids.has(_lead_id):
+		return
+	_lead_id = int(ids[0])
+
+
+func _cycle_lead(step: int) -> void:
+	var ids: Array = _clock.waiting_ids()
+	if ids.is_empty():
+		return
+	var index: int = ids.find(_lead_id)
+	if index < 0:
+		index = 0
+	else:
+		index = posmod(index + step, ids.size())
+	var next_id: int = int(ids[index])
+	if next_id == _lead_id:
+		return
+	var previous: Fighter = _lead()
+	if previous != null:
+		previous.part = ""
+		previous.aiming = false
+		previous.aiming_touch = false
+	_lead_id = next_id
 	_refresh_view()
 
 
@@ -48,11 +129,12 @@ func _physics_process(_delta: float) -> void:
 	if not _clock.is_paused():
 		_step_moves()
 		_clock.tick(1)
+	_sync_lead()
 	_refresh_view()
 
 
 func _choose_part(part: String) -> void:
-	var fighter: Fighter = _fighters[0]
+	var fighter: Fighter = _lead()
 	if _clock.phase_of(fighter.id) != Clock.Phase.WAITING:
 		return
 	fighter.part = part
@@ -60,7 +142,7 @@ func _choose_part(part: String) -> void:
 
 
 func _clear_part() -> void:
-	var fighter: Fighter = _fighters[0]
+	var fighter: Fighter = _lead()
 	fighter.part = ""
 	_refresh_view()
 
@@ -69,12 +151,12 @@ func _choose_action(action: String) -> void:
 	if action == "move":
 		_begin_aim()
 	elif action == "touch":
-		_begin_touch(_fighters[0])
+		_begin_touch(_lead())
 	_refresh_view()
 
 
 func _begin_aim() -> void:
-	var fighter: Fighter = _fighters[0]
+	var fighter: Fighter = _lead()
 	if fighter.part != "legs":
 		return
 	if _clock.phase_of(fighter.id) != Clock.Phase.WAITING:
@@ -83,13 +165,16 @@ func _begin_aim() -> void:
 
 
 func _cancel_aim() -> void:
-	_fighters[0].aiming = false
-	_fighters[0].aiming_touch = false
+	var fighter: Fighter = _lead()
+	if fighter == null:
+		return
+	fighter.aiming = false
+	fighter.aiming_touch = false
 	_refresh_view()
 
 
 func _confirm_move(point: Vector3) -> void:
-	var fighter: Fighter = _fighters[0]
+	var fighter: Fighter = _lead()
 	if not fighter.aiming:
 		return
 	if _clock.phase_of(fighter.id) != Clock.Phase.WAITING:
@@ -172,7 +257,7 @@ func _begin_touch(fighter: Fighter) -> void:
 
 
 func _confirm_touch(aim_yaw: float) -> void:
-	var fighter: Fighter = _fighters[0]
+	var fighter: Fighter = _lead()
 	if not fighter.aiming_touch or fighter.swing == null or fighter.move_profile == null:
 		return
 	if _clock.phase_of(fighter.id) != Clock.Phase.WAITING:
@@ -239,7 +324,7 @@ func _select_touch_target(attacker: Fighter, touch: TouchProfile, aim_yaw: float
 			continue
 		if not _in_touch_scope(attacker, other, touch, aim_yaw):
 			continue
-		var off_center: float = _off_center(attacker, other, aim_yaw)
+		var off_center: float = _body_off_center(attacker, other, aim_yaw)
 		var gap: float = _flat_offset(attacker, other).length()
 		var nearer_center: bool = chosen == null or off_center < chosen_off - SAME_CENTERING_DEGREES
 		var same_center: bool = chosen != null and absf(off_center - chosen_off) <= SAME_CENTERING_DEGREES
@@ -251,20 +336,28 @@ func _select_touch_target(attacker: Fighter, touch: TouchProfile, aim_yaw: float
 
 
 func _in_touch_scope(attacker: Fighter, target: Fighter, touch: TouchProfile, facing_degrees: float) -> bool:
-	var offset: Vector3 = _flat_offset(attacker, target)
-	if offset.length() > touch.range_meters + target.body_radius:
+	var distance: float = _flat_offset(attacker, target).length()
+	if distance > touch.range_meters + target.body_radius:
 		return false
-	if offset.length() < 0.001:
-		return true
-	return _off_center(attacker, target, facing_degrees) <= touch.scope_degrees
+	return _body_off_center(attacker, target, facing_degrees) <= touch.scope_degrees
 
 
-func _off_center(attacker: Fighter, target: Fighter, aim_yaw: float) -> float:
+func _center_meets_body(attacker: Fighter, target: Fighter, touch: TouchProfile, aim_yaw: float) -> bool:
+	var distance: float = _flat_offset(attacker, target).length()
+	if distance > touch.range_meters + target.body_radius:
+		return false
+	return _body_off_center(attacker, target, aim_yaw) <= SAME_CENTERING_DEGREES
+
+
+func _body_off_center(attacker: Fighter, target: Fighter, aim_yaw: float) -> float:
 	var offset: Vector3 = _flat_offset(attacker, target)
-	if offset.length() < 0.001:
+	var distance: float = offset.length()
+	if distance <= target.body_radius or distance < 0.001:
 		return 0.0
 	var toward: float = rad_to_deg(atan2(offset.x, offset.z))
-	return absf(MoveProfile.shortest_yaw(aim_yaw, toward))
+	var center_off: float = absf(MoveProfile.shortest_yaw(aim_yaw, toward))
+	var seen: float = rad_to_deg(asin(clampf(target.body_radius / distance, 0.0, 1.0)))
+	return maxf(0.0, center_off - seen)
 
 
 func _flat_offset(attacker: Fighter, target: Fighter) -> Vector3:
@@ -397,7 +490,7 @@ func _refresh_view() -> void:
 		fighter.mesh.position = shown
 		fighter.mesh.rotation_degrees = Vector3(0.0, fighter.yaw_degrees, 0.0)
 		fighter.label.text = "%s  %s" % [fighter.who, _fighter_line(fighter, phase)]
-	var lead: Fighter = _fighters[0]
+	var lead: Fighter = _lead()
 	var lead_phase: int = _clock.phase_of(lead.id)
 	var aiming: bool = lead.aiming and lead_phase == Clock.Phase.WAITING
 	var aiming_touch: bool = lead.aiming_touch and lead_phase == Clock.Phase.WAITING and lead.swing != null and lead.move_profile != null
@@ -411,12 +504,13 @@ func _refresh_view() -> void:
 		_attack_aim.set_attack(attack_origin, lead.yaw_degrees, lead.swing.range_meters, arc, lead.swing.scope_degrees)
 		targeted = _select_touch_target(lead, lead.swing, _attack_aim.aim_yaw())
 	if targeted == null:
-		_attack_aim.set_target(Vector3.ZERO, 0.0)
+		_attack_aim.set_target(Vector3.ZERO, 0.0, false)
 	else:
 		var ring_center: Vector3 = targeted.base_position
 		ring_center.y = 0.0
 		var ring_radius: float = targeted.body_radius * sqrt(2.0) + 0.06
-		_attack_aim.set_target(ring_center, ring_radius)
+		var full_intent: bool = _center_meets_body(lead, targeted, lead.swing, _attack_aim.aim_yaw())
+		_attack_aim.set_target(ring_center, ring_radius, full_intent)
 	if aiming:
 		var origin: Vector3 = lead.base_position
 		origin.y = 0.0
@@ -435,17 +529,19 @@ func _refresh_view() -> void:
 	else:
 		_state.texture = _play_icon
 	_refresh_menu()
+	_mark_waiting()
+	_frame_waiting()
 
 
-func _sheet_frame(at_x: int) -> AtlasTexture:
+func _sheet_frame(sheet: Texture2D, at_x: int) -> AtlasTexture:
 	var icon: AtlasTexture = AtlasTexture.new()
-	icon.atlas = PLAY_PAUSE
+	icon.atlas = sheet
 	icon.region = Rect2(at_x, 0, STATE_FRAME, STATE_FRAME)
 	return icon
 
 
 func _refresh_menu() -> void:
-	var fighter: Fighter = _fighters[0]
+	var fighter: Fighter = _lead()
 	var phase: int = _clock.phase_of(fighter.id)
 	var step: String = "busy"
 	if phase == Clock.Phase.WAITING and fighter.aiming_touch:
@@ -498,6 +594,68 @@ func _part_title(part: String) -> String:
 			return "Legs"
 		_:
 			return part
+
+
+func _mark_waiting() -> void:
+	var waiting: Fighter = _lead()
+	if _menu_step == "aim" or _menu_step == "touch" or waiting == null:
+		_await_ring.set_ring(Vector3.ZERO, 0.0)
+		return
+	if _clock.phase_of(waiting.id) != Clock.Phase.WAITING:
+		_await_ring.set_ring(Vector3.ZERO, 0.0)
+		return
+	var ring_center: Vector3 = waiting.base_position
+	ring_center.y = 0.0
+	_await_ring.set_ring(ring_center, waiting.body_radius * sqrt(2.0) + 0.06)
+
+
+func _frame_waiting() -> void:
+	var ids: Array = _clock.waiting_ids()
+	if ids.is_empty():
+		_framed_id = -1
+		return
+	if _lead_id == _framed_id:
+		return
+	var waiting: Fighter = _lead()
+	if waiting == null:
+		return
+	_framed_id = _lead_id
+	_camera.frame_at(waiting.mesh.global_position)
+
+
+func _scatter(roster: Array) -> void:
+	var entropy: RandomNumberGenerator = RandomNumberGenerator.new()
+	entropy.randomize()
+	_layout_seed = entropy.randi()
+	var roll: RandomNumberGenerator = RandomNumberGenerator.new()
+	roll.seed = _layout_seed
+	var placed: Array = []
+	for fighter: Fighter in roster:
+		var spot: Vector2 = _open_spot(roll, placed, fighter.body_radius)
+		fighter.base_position = Vector3(spot.x, 0.5, spot.y)
+		fighter.yaw_degrees = roll.randf_range(-180.0, 180.0)
+		fighter.mesh.position = fighter.base_position
+		fighter.mesh.rotation_degrees = Vector3(0.0, fighter.yaw_degrees, 0.0)
+		placed.append(fighter)
+
+
+func _open_spot(roll: RandomNumberGenerator, placed: Array, body_radius: float) -> Vector2:
+	var spot: Vector2 = Vector2.ZERO
+	var attempt: int = 0
+	while attempt < 24:
+		var angle: float = roll.randf() * TAU
+		var distance: float = sqrt(roll.randf()) * SPAWN_RADIUS
+		spot = Vector2(sin(angle), cos(angle)) * distance
+		var clear: bool = true
+		for other: Fighter in placed:
+			var other_spot: Vector2 = Vector2(other.base_position.x, other.base_position.z)
+			if other_spot.distance_to(spot) < body_radius + other.body_radius + SPAWN_GAP:
+				clear = false
+				break
+		if clear:
+			return spot
+		attempt += 1
+	return spot
 
 
 func _add_button(title: String, on_pressed: Callable) -> void:
@@ -597,7 +755,6 @@ func _add_fighter(who: String, at: Vector3, color: Color, holds_time: bool) -> F
 	label.outline_size = 2
 	label.modulate = Color.WHITE
 	body.add_child(label)
-	body.add_to_group("camera_subject")
 	add_child(body)
 	var fighter: Fighter = Fighter.new()
 	fighter.who = who
