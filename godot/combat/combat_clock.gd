@@ -19,11 +19,11 @@ var _next_id: int = 1
 var _paused: bool = false
 
 
-func add_participant(blocking: bool) -> int:
+func add_participant(holds_time: bool) -> int:
 	var participant: Participant = Participant.new()
 	participant.id = _next_id
 	_next_id += 1
-	participant.blocking = blocking
+	participant.holds_time = holds_time
 	participant.phase = Phase.WAITING
 	_participants.append(participant)
 	phase_changed.emit(participant.id, Phase.WAITING)
@@ -76,10 +76,24 @@ func time_left(participant_id: int) -> int:
 	return participant.time_left
 
 
+func active_of(participant_id: int) -> int:
+	var participant: Participant = _participant(participant_id)
+	if participant == null or participant.order == null:
+		return 0
+	return participant.order.active
+
+
+func payload_of(participant_id: int) -> Variant:
+	var participant: Participant = _participant(participant_id)
+	if participant == null or participant.order == null:
+		return null
+	return participant.order.payload
+
+
 func waiting_ids() -> Array:
 	var ids: Array = []
 	for participant: Participant in _participants:
-		if participant.blocking and participant.phase == Phase.WAITING:
+		if participant.holds_time and participant.phase == Phase.WAITING:
 			ids.append(participant.id)
 	return ids
 
@@ -231,7 +245,7 @@ func _participant(participant_id: int) -> Participant:
 
 class Participant extends RefCounted:
 	var id: int = 0
-	var blocking: bool = true
+	var holds_time: bool = true
 	var phase: Phase = Phase.WAITING
 	var time_left: int = 0
 	var token: int = 0

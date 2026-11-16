@@ -14,7 +14,6 @@ Left in the source document:
 - Purpose and mission.
 - Setting prose.
 - The worldbuilding ideas parking lot (transhumanism, time travel).
-- The combat ideas parking lot, which is still empty in the source.
 
 Setting 2 combat (protect the Ringfighter, third-party interruptions) is recorded only as deferred. The source marks that win condition as later work.
 

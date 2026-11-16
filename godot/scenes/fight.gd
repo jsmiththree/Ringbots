@@ -3,15 +3,18 @@ extends Node3D
 const Clock = preload("res://combat/combat_clock.gd")
 const Order = preload("res://combat/combat_order.gd")
 const MoveProfile = preload("res://combat/move_profile.gd")
+const MoveInput = preload("res://combat/move_input.gd")
+const ActionKind = preload("res://combat/action_kind.gd")
+const TouchProfile = preload("res://combat/touch_profile.gd")
+const TouchInput = preload("res://combat/touch_input.gd")
+const ReactionInput = preload("res://combat/reaction_input.gd")
+const PushbackProfile = preload("res://combat/pushback_profile.gd")
 const GRID: Texture2D = preload("res://assets/textures/debug_grid.png")
 const PLAY_PAUSE: Texture2D = preload("res://assets/sprites/play_pause.png")
 const Aim = preload("res://scenes/move_aim.gd")
+const AttackAim = preload("res://scenes/attack_aim.gd")
 const STATE_FRAME: int = 32
-
-## Stand-in frame counts. The design document has no formulas for these yet.
-const ATTACK_LENGTHS: Vector3i = Vector3i(18, 8, 20)
-const BRACE_LENGTHS: Vector3i = Vector3i(10, 16, 12)
-const PARRY_LENGTHS: Vector3i = Vector3i(6, 8, 18)
+const SAME_CENTERING_DEGREES: float = 0.01
 const FLOOR_SIZE: float = 16.0
 
 var _clock: Clock
@@ -24,15 +27,20 @@ var _play_icon: AtlasTexture
 @onready var _choice: Label = %Choice
 @onready var _options: HBoxContainer = %Options
 @onready var _aim: Aim = %MoveAim
+@onready var _attack_aim: AttackAim = %AttackAim
 
 
 func _ready() -> void:
 	_pause_icon = _sheet_frame(STATE_FRAME)
 	_play_icon = _sheet_frame(0)
 	_aim.destination_chosen.connect(_confirm_move)
+	_attack_aim.direction_chosen.connect(_confirm_touch)
 	_add_room()
 	_clock = Clock.new()
-	_fighters.append(_add_fighter("P1", Vector3(0, 0.5, 0), Color(0.25, 0.75, 1.0)))
+	_fighters.append(_add_fighter("P1", Vector3(0, 0.5, 0), Color(0.25, 0.75, 1.0), true))
+	var sandbag: Fighter = _add_fighter("Sandbag", Vector3(0, 0.5, 3), Color.WHITE, false)
+	sandbag.yaw_degrees = 180.0
+	_fighters.append(sandbag)
 	_refresh_view()
 
 
@@ -60,9 +68,8 @@ func _clear_part() -> void:
 func _choose_action(action: String) -> void:
 	if action == "move":
 		_begin_aim()
-		_refresh_view()
-		return
-	_try_action(_fighters[0], action)
+	elif action == "touch":
+		_begin_touch(_fighters[0])
 	_refresh_view()
 
 
@@ -77,6 +84,7 @@ func _begin_aim() -> void:
 
 func _cancel_aim() -> void:
 	_fighters[0].aiming = false
+	_fighters[0].aiming_touch = false
 	_refresh_view()
 
 
@@ -107,105 +115,283 @@ func _confirm_move(point: Vector3) -> void:
 		offset = offset * (limit / distance)
 		distance = limit
 		flat_end = flat_start + offset
+	flat_end = _clear_of_fighters(fighter, flat_start, flat_end)
+	offset = flat_end - flat_start
+	distance = offset.length()
+	if distance < 0.05:
+		return
+	var input: MoveInput = MoveInput.new()
+	input.kind = ActionKind.Kind.MOVE
+	input.part = fighter.part
+	input.destination = Vector3(flat_end.x, 0.0, flat_end.z)
+	_submit_move(fighter, input)
+	_refresh_view()
+
+
+func _submit_move(fighter: Fighter, input: MoveInput) -> void:
+	var profile: MoveProfile = fighter.move_profile
+	if profile == null:
+		return
+	var step_length: float = profile.meters_per_frame()
+	if step_length <= 0.0:
+		return
+	var flat_start: Vector3 = fighter.base_position
+	flat_start.y = 0.0
+	var flat_end: Vector3 = input.destination
+	flat_end.y = 0.0
+	var offset: Vector3 = flat_end - flat_start
+	var distance: float = offset.length()
+	if distance < 0.05:
+		return
+	var aim_yaw: float = rad_to_deg(atan2(offset.x, offset.z))
+	var turn: float = MoveProfile.shortest_yaw(fighter.yaw_degrees, aim_yaw)
 	var turning: int = profile.turn_frames(turn)
 	var travel_frames: int = ceili(distance / step_length)
 	if travel_frames <= 0:
 		return
-	var label: String = "legs move"
-	var order: Order = Order.new(turning, travel_frames, 0, label)
+	var label: String = "%s move" % input.part
+	var order: Order = Order.new(turning, travel_frames, 0, input)
 	if not _clock.submit_order(fighter.id, order):
 		return
-	fighter.action = "move"
 	fighter.action_label = label
-	fighter.active_length = travel_frames
 	fighter.part = ""
 	fighter.aiming = false
-	fighter.move_yaw = aim_yaw
-	fighter.move_destination = Vector3(flat_end.x, fighter.base_position.y, flat_end.z)
-	fighter.move_step = step_length
-	fighter.turn_step = profile.turn_degrees_per_frame
-	_refresh_view()
+	fighter.aiming_touch = false
 
 
-func _try_action(fighter: Fighter, action: String) -> void:
-	if fighter.part == "":
+func _begin_touch(fighter: Fighter) -> void:
+	if fighter.part != "left arm" and fighter.part != "right arm":
 		return
-	if fighter.part == "head" and action != "attack":
+	if _clock.phase_of(fighter.id) != Clock.Phase.WAITING:
 		return
-	if fighter.part == "legs" and action != "move":
+	var touch: TouchProfile = fighter.right_touch if fighter.part == "right arm" else fighter.left_touch
+	if touch == null:
 		return
-	var resolved: String = action
-	var lengths: Vector3i = _lengths(resolved)
-	var label: String = "%s %s" % [fighter.part, resolved]
-	var order: Order = Order.new(lengths.x, lengths.y, lengths.z, label)
+	fighter.swing = touch
+	fighter.aiming_touch = true
+
+
+func _confirm_touch(aim_yaw: float) -> void:
+	var fighter: Fighter = _fighters[0]
+	if not fighter.aiming_touch or fighter.swing == null or fighter.move_profile == null:
+		return
+	if _clock.phase_of(fighter.id) != Clock.Phase.WAITING:
+		return
+	var touch: TouchProfile = fighter.swing
+	var arc: float = TouchProfile.turn_arc_degrees(touch.startup_frames, fighter.move_profile.turn_degrees_per_frame)
+	var yaw: float = TouchProfile.clamp_aim_yaw(fighter.yaw_degrees, aim_yaw, arc)
+	var input: TouchInput = TouchInput.new()
+	input.kind = ActionKind.Kind.TOUCH
+	input.part = fighter.part
+	input.aim_yaw = yaw
+	_submit_touch(fighter, input)
+
+
+func _submit_touch(fighter: Fighter, input: TouchInput) -> void:
+	var touch: TouchProfile = _touch_profile(fighter, input.part)
+	if touch == null or fighter.move_profile == null:
+		return
+	var label: String = "%s touch" % input.part
+	var order: Order = Order.new(touch.startup_frames, touch.active_frames, touch.wind_down_frames, input, Callable(self, "_touch_opened"))
 	if not _clock.submit_order(fighter.id, order):
 		return
-	fighter.action = resolved
+	fighter.aiming_touch = false
 	fighter.action_label = label
-	fighter.active_length = lengths.y
 	fighter.part = ""
 
 
-func _lengths(action: String) -> Vector3i:
-	match action:
-		"attack":
-			return ATTACK_LENGTHS
-		"brace":
-			return BRACE_LENGTHS
-		"parry":
-			return PARRY_LENGTHS
-		_:
-			return Vector3i(8, 8, 8)
+func _touch_opened(combat_clock: Clock, participant_id: int) -> Variant:
+	var attacker: Fighter = _fighter_by_id(participant_id)
+	var input: TouchInput = _touch_input_from(combat_clock.payload_of(participant_id))
+	if attacker == null or input == null:
+		return null
+	var touch: TouchProfile = _touch_profile(attacker, input.part)
+	if touch == null:
+		return null
+	var target: Fighter = _select_touch_target(attacker, touch, input.aim_yaw)
+	if target != null:
+		_start_pushback(combat_clock, attacker, target, touch.pushback_strength)
+	return null
+
+
+func _touch_input_from(value: Variant) -> TouchInput:
+	if value == null or not (value is RefCounted):
+		return null
+	if (value as RefCounted).get_script() != TouchInput:
+		return null
+	return value as TouchInput
+
+
+func _touch_profile(fighter: Fighter, part_name: String) -> TouchProfile:
+	if part_name == "left arm":
+		return fighter.left_touch
+	if part_name == "right arm":
+		return fighter.right_touch
+	return null
+
+
+func _select_touch_target(attacker: Fighter, touch: TouchProfile, aim_yaw: float) -> Fighter:
+	var chosen: Fighter = null
+	var chosen_off: float = 0.0
+	var chosen_distance: float = 0.0
+	for other: Fighter in _fighters:
+		if other == attacker:
+			continue
+		if not _in_touch_scope(attacker, other, touch, aim_yaw):
+			continue
+		var off_center: float = _off_center(attacker, other, aim_yaw)
+		var gap: float = _flat_offset(attacker, other).length()
+		var nearer_center: bool = chosen == null or off_center < chosen_off - SAME_CENTERING_DEGREES
+		var same_center: bool = chosen != null and absf(off_center - chosen_off) <= SAME_CENTERING_DEGREES
+		if nearer_center or (same_center and gap < chosen_distance):
+			chosen = other
+			chosen_off = off_center
+			chosen_distance = gap
+	return chosen
+
+
+func _in_touch_scope(attacker: Fighter, target: Fighter, touch: TouchProfile, facing_degrees: float) -> bool:
+	var offset: Vector3 = _flat_offset(attacker, target)
+	if offset.length() > touch.range_meters + target.body_radius:
+		return false
+	if offset.length() < 0.001:
+		return true
+	return _off_center(attacker, target, facing_degrees) <= touch.scope_degrees
+
+
+func _off_center(attacker: Fighter, target: Fighter, aim_yaw: float) -> float:
+	var offset: Vector3 = _flat_offset(attacker, target)
+	if offset.length() < 0.001:
+		return 0.0
+	var toward: float = rad_to_deg(atan2(offset.x, offset.z))
+	return absf(MoveProfile.shortest_yaw(aim_yaw, toward))
+
+
+func _flat_offset(attacker: Fighter, target: Fighter) -> Vector3:
+	var offset: Vector3 = target.base_position - attacker.base_position
+	offset.y = 0.0
+	return offset
+
+
+func _start_pushback(combat_clock: Clock, attacker: Fighter, target: Fighter, strength: float) -> void:
+	var profile: PushbackProfile = target.pushback_profile
+	if profile == null or strength <= 0.0 or profile.meters_per_strength <= 0.0 or profile.meters_per_frame <= 0.0:
+		return
+	var push_meters: float = strength * profile.meters_per_strength
+	var away: Vector3 = target.base_position - attacker.base_position
+	away.y = 0.0
+	if away.length_squared() < 0.0001:
+		var yaw: float = deg_to_rad(attacker.yaw_degrees)
+		away = Vector3(sin(yaw), 0.0, cos(yaw))
+	else:
+		away = away.normalized()
+	var frames: int = ceili(push_meters / profile.meters_per_frame)
+	if frames <= 0:
+		return
+	var input: ReactionInput = ReactionInput.new()
+	input.kind = ActionKind.Kind.REACTION
+	input.destination = target.base_position + away * push_meters
+	var order: Order = Order.new(0, frames, profile.wind_down_frames, input)
+	if not combat_clock.submit_order(target.id, order):
+		return
+	target.action_label = "pushback"
+	target.part = ""
+	target.aiming = false
+	target.aiming_touch = false
+
+
+func _fighter_by_id(participant_id: int) -> Fighter:
+	for fighter: Fighter in _fighters:
+		if fighter.id == participant_id:
+			return fighter
+	return null
+
+
+func _move_input_from(value: Variant) -> MoveInput:
+	if value == null or not (value is RefCounted):
+		return null
+	if (value as RefCounted).get_script() != MoveInput:
+		return null
+	return value as MoveInput
+
+
+func _reaction_input_from(value: Variant) -> ReactionInput:
+	if value == null or not (value is RefCounted):
+		return null
+	if (value as RefCounted).get_script() != ReactionInput:
+		return null
+	return value as ReactionInput
 
 
 func _step_moves() -> void:
 	for fighter: Fighter in _fighters:
-		if fighter.action != "move":
-			continue
 		var phase: int = _clock.phase_of(fighter.id)
-		if phase == Clock.Phase.STU:
-			_step_turn(fighter)
-		elif phase == Clock.Phase.ADR:
-			_step_travel(fighter)
+		var payload: Variant = _clock.payload_of(fighter.id)
+		var move_input: MoveInput = _move_input_from(payload)
+		if move_input != null and fighter.move_profile != null:
+			if phase == Clock.Phase.STU:
+				_step_turn(fighter, _heading_toward(fighter, move_input.destination), fighter.move_profile.turn_degrees_per_frame)
+			elif phase == Clock.Phase.ADR:
+				_step_slide(fighter, move_input.destination, fighter.move_profile.meters_per_frame(), true)
+			continue
+		var touch_input: TouchInput = _touch_input_from(payload)
+		if touch_input != null and fighter.move_profile != null and phase == Clock.Phase.STU:
+			_step_turn(fighter, touch_input.aim_yaw, fighter.move_profile.turn_degrees_per_frame)
+			continue
+		var reaction: ReactionInput = _reaction_input_from(payload)
+		if reaction != null and fighter.pushback_profile != null and phase == Clock.Phase.ADR:
+			_step_slide(fighter, reaction.destination, fighter.pushback_profile.meters_per_frame, false)
 
 
-func _step_turn(fighter: Fighter) -> void:
+func _heading_toward(fighter: Fighter, destination: Vector3) -> float:
+	var offset: Vector3 = destination - fighter.base_position
+	offset.y = 0.0
+	if offset.length() < 0.001:
+		return fighter.yaw_degrees
+	return rad_to_deg(atan2(offset.x, offset.z))
+
+
+func _step_turn(fighter: Fighter, aim_yaw: float, degrees_per_frame: float) -> void:
 	if _clock.time_left(fighter.id) <= 0:
 		return
-	var remaining_yaw: float = MoveProfile.shortest_yaw(fighter.yaw_degrees, fighter.move_yaw)
-	if absf(remaining_yaw) <= fighter.turn_step:
-		fighter.yaw_degrees = fighter.move_yaw
+	var remaining_yaw: float = MoveProfile.shortest_yaw(fighter.yaw_degrees, aim_yaw)
+	if absf(remaining_yaw) <= degrees_per_frame:
+		fighter.yaw_degrees = aim_yaw
 		return
 	if remaining_yaw > 0.0:
-		fighter.yaw_degrees += fighter.turn_step
+		fighter.yaw_degrees += degrees_per_frame
 	else:
-		fighter.yaw_degrees -= fighter.turn_step
+		fighter.yaw_degrees -= degrees_per_frame
 	fighter.yaw_degrees = wrapf(fighter.yaw_degrees, -180.0, 180.0)
 
 
-func _step_travel(fighter: Fighter) -> void:
+func _step_slide(fighter: Fighter, destination: Vector3, meters_per_frame: float, face_travel: bool) -> void:
 	var next: Vector3 = fighter.base_position
-	var offset: Vector3 = fighter.move_destination - next
+	var end_point: Vector3 = Vector3(destination.x, next.y, destination.z)
+	var offset: Vector3 = end_point - next
 	offset.y = 0.0
 	var distance: float = offset.length()
-	if distance <= fighter.move_step:
-		next.x = fighter.move_destination.x
-		next.z = fighter.move_destination.z
-		fighter.base_position = next
-		fighter.yaw_degrees = fighter.move_yaw
+	if distance < 0.001 or meters_per_frame <= 0.0:
 		return
-	next += offset / distance * fighter.move_step
+	var heading: float = rad_to_deg(atan2(offset.x, offset.z))
+	if distance <= meters_per_frame:
+		next.x = end_point.x
+		next.z = end_point.z
+	else:
+		next += offset / distance * meters_per_frame
 	fighter.base_position = next
-	fighter.yaw_degrees = fighter.move_yaw
+	if face_travel:
+		fighter.yaw_degrees = heading
 
 
 func _refresh_view() -> void:
 	for fighter: Fighter in _fighters:
 		var shown: Vector3 = fighter.base_position
 		var phase: int = _clock.phase_of(fighter.id)
-		if phase == Clock.Phase.ADR and fighter.action == "attack" and fighter.active_length > 0:
+		var active_frames: int = _clock.active_of(fighter.id)
+		if phase == Clock.Phase.ADR and _touch_input_from(_clock.payload_of(fighter.id)) != null and active_frames > 0:
 			var remaining: float = float(_clock.time_left(fighter.id))
-			var along: float = 1.0 - remaining / float(fighter.active_length)
+			var along: float = 1.0 - remaining / float(active_frames)
 			var yaw: float = deg_to_rad(fighter.yaw_degrees)
 			shown += Vector3(sin(yaw), 0.0, cos(yaw)) * sin(along * PI) * 0.6
 		fighter.mesh.position = shown
@@ -214,11 +400,36 @@ func _refresh_view() -> void:
 	var lead: Fighter = _fighters[0]
 	var lead_phase: int = _clock.phase_of(lead.id)
 	var aiming: bool = lead.aiming and lead_phase == Clock.Phase.WAITING
+	var aiming_touch: bool = lead.aiming_touch and lead_phase == Clock.Phase.WAITING and lead.swing != null and lead.move_profile != null
 	_aim.set_active(aiming)
+	_attack_aim.set_active(aiming_touch)
+	var targeted: Fighter = null
+	if aiming_touch:
+		var attack_origin: Vector3 = lead.base_position
+		attack_origin.y = 0.0
+		var arc: float = TouchProfile.turn_arc_degrees(lead.swing.startup_frames, lead.move_profile.turn_degrees_per_frame)
+		_attack_aim.set_attack(attack_origin, lead.yaw_degrees, lead.swing.range_meters, arc, lead.swing.scope_degrees)
+		targeted = _select_touch_target(lead, lead.swing, _attack_aim.aim_yaw())
+	if targeted == null:
+		_attack_aim.set_target(Vector3.ZERO, 0.0)
+	else:
+		var ring_center: Vector3 = targeted.base_position
+		ring_center.y = 0.0
+		var ring_radius: float = targeted.body_radius * sqrt(2.0) + 0.06
+		_attack_aim.set_target(ring_center, ring_radius)
 	if aiming:
 		var origin: Vector3 = lead.base_position
 		origin.y = 0.0
-		_aim.set_move(origin, lead.yaw_degrees, lead.move_profile)
+		var blocked_centers: PackedVector3Array = PackedVector3Array()
+		var blocked_radii: PackedFloat32Array = PackedFloat32Array()
+		for other: Fighter in _fighters:
+			if other == lead:
+				continue
+			var blocked_center: Vector3 = other.base_position
+			blocked_center.y = 0.0
+			blocked_centers.append(blocked_center)
+			blocked_radii.append(lead.body_radius + other.body_radius)
+		_aim.set_move(origin, lead.yaw_degrees, lead.move_profile, blocked_centers, blocked_radii)
 	if _clock.is_paused():
 		_state.texture = _pause_icon
 	else:
@@ -237,7 +448,9 @@ func _refresh_menu() -> void:
 	var fighter: Fighter = _fighters[0]
 	var phase: int = _clock.phase_of(fighter.id)
 	var step: String = "busy"
-	if phase == Clock.Phase.WAITING and fighter.aiming:
+	if phase == Clock.Phase.WAITING and fighter.aiming_touch:
+		step = "touch"
+	elif phase == Clock.Phase.WAITING and fighter.aiming:
 		step = "aim"
 	elif phase == Clock.Phase.WAITING and fighter.part == "":
 		step = "part"
@@ -258,16 +471,16 @@ func _refresh_menu() -> void:
 		_choice.text = "Move"
 		_add_button("Back", _cancel_aim)
 		return
+	if step == "touch":
+		_choice.text = "Attack"
+		_add_button("Back", _cancel_aim)
+		return
 	if step == "action":
 		_choice.text = _part_title(fighter.part)
-		if fighter.part == "head":
-			_add_button("Attack", _choose_action.bind("attack"))
-		elif fighter.part == "legs":
+		if fighter.part == "legs":
 			_add_button("Move", _choose_action.bind("move"))
-		else:
-			_add_button("Attack", _choose_action.bind("attack"))
-			_add_button("Brace", _choose_action.bind("brace"))
-			_add_button("Parry", _choose_action.bind("parry"))
+		elif fighter.part == "left arm" or fighter.part == "right arm":
+			_add_button("Attack", _choose_action.bind("touch"))
 		_add_button("Back", _clear_part)
 		return
 	_choice.text = fighter.action_label
@@ -331,7 +544,7 @@ func _add_room() -> void:
 	env.background_color = Color(0.015, 0.015, 0.018)
 	world.environment = env
 	add_child(world)
-	_add_surface("Floor", PlaneMesh.new(), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector2(FLOOR_SIZE, FLOOR_SIZE), Color(0.62, 0.64, 0.68), true)
+	_add_surface("Floor", PlaneMesh.new(), Vector3(0, 0, 0), Vector3(0, 0, 0), Vector2(FLOOR_SIZE, FLOOR_SIZE), Color(0.4, 0.4, 0.4), true)
 
 
 func _add_surface(node_name: String, mesh: PrimitiveMesh, at: Vector3, surface_euler: Vector3, size: Vector2, color: Color, tiled: bool) -> void:
@@ -351,7 +564,19 @@ func _add_surface(node_name: String, mesh: PrimitiveMesh, at: Vector3, surface_e
 	add_child(body)
 
 
-func _add_fighter(who: String, at: Vector3, color: Color) -> Fighter:
+func _clear_of_fighters(mover: Fighter, start: Vector3, end: Vector3) -> Vector3:
+	var kept: Vector3 = end
+	for other: Fighter in _fighters:
+		if other == mover:
+			continue
+		var center: Vector3 = other.base_position
+		center.y = 0.0
+		var clearance: float = mover.body_radius + other.body_radius + Aim.MARKER_RADIUS
+		kept = Aim.stop_before(start, kept, center, clearance)
+	return kept
+
+
+func _add_fighter(who: String, at: Vector3, color: Color, holds_time: bool) -> Fighter:
 	var body: Node3D = Node3D.new()
 	body.name = who
 	body.position = at
@@ -376,11 +601,14 @@ func _add_fighter(who: String, at: Vector3, color: Color) -> Fighter:
 	add_child(body)
 	var fighter: Fighter = Fighter.new()
 	fighter.who = who
-	fighter.id = _clock.add_participant(true)
+	fighter.id = _clock.add_participant(holds_time)
 	fighter.mesh = body
 	fighter.label = label
 	fighter.base_position = at
 	fighter.move_profile = MoveProfile.new()
+	fighter.left_touch = TouchProfile.new()
+	fighter.right_touch = TouchProfile.new()
+	fighter.pushback_profile = PushbackProfile.new()
 	return fighter
 
 
@@ -417,11 +645,11 @@ class Fighter extends RefCounted:
 	var base_position: Vector3 = Vector3.ZERO
 	var part: String = ""
 	var aiming: bool = false
-	var action: String = ""
+	var aiming_touch: bool = false
 	var action_label: String = ""
-	var active_length: int = 0
-	var move_yaw: float = 0.0
-	var move_destination: Vector3 = Vector3.ZERO
 	var move_profile: MoveProfile
-	var move_step: float = 0.0
-	var turn_step: float = 0.0
+	var left_touch: TouchProfile
+	var right_touch: TouchProfile
+	var swing: TouchProfile
+	var pushback_profile: PushbackProfile
+	var body_radius: float = 0.5
